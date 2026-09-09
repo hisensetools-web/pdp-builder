@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+pdp_output/
+data/shopify_token.json
+.pytest_cache/
