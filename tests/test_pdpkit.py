@@ -252,6 +252,44 @@ class HiggsfieldTests(unittest.TestCase):
         self.assertEqual(status, "exists")
         self.assertIn("image_urls", d)
 
+    def test_map_fields_walks_a_json_schema_validator(self):
+        from higgsfield_client.exceptions import HiggsfieldClientError
+        schema = {"quality": ("enum", ["low", "medium", "high"]), "prompt": ("type", "string"),
+                  "image_urls": ("type", "array"), "aspect_ratio": ("enum", ["1:1", "16:9"]), "n": ("type", "integer")}
+        cancelled = []
+
+        class Ctl:
+            def __init__(self, rid): self.rid = rid
+            def cancel(self): cancelled.append(self.rid)
+
+        class Resp:
+            def json(self): return {"request_id": "r1"}
+
+        class T:
+            @staticmethod
+            def request(method, url, json=None, **kw):
+                for name, (kind, spec) in schema.items():
+                    v = json.get(name)
+                    if kind == "enum" and v not in spec:
+                        raise HiggsfieldClientError(f"{name}: {v!r} is not one of {spec!r}")
+                    if kind == "type" and not isinstance(v, {"string": str, "array": list, "integer": int}[spec]):
+                        raise HiggsfieldClientError(f"{name}: {v!r} is not of type '{spec}'")
+                extra = [k for k in json if k not in schema]
+                if extra:
+                    raise HiggsfieldClientError("Additional properties are not allowed (" + ", ".join(repr(k) for k in extra) + " were unexpected)")
+                return Resp()
+
+        class C:
+            _transport = T()
+            @staticmethod
+            def get_request_controller(rid): return Ctl(rid)
+
+        result = higgsfield.map_fields(C(), "m", log_fn=lambda m: None)
+        self.assertEqual(set(result["known"]), {"quality", "prompt", "image_urls", "aspect_ratio", "n"})
+        self.assertEqual(result["known"]["image_urls"], "array")
+        self.assertIn("image_url", result["unknown"])
+        self.assertEqual(cancelled, ["r1"])
+
     def test_upload_error_is_explained(self):
         msg = higgsfield.explain_error(higgsfield.UploadError("refused"), "m")
         self.assertIn("accepted the key", msg)

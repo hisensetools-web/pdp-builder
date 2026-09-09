@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -329,6 +330,99 @@ def required_fields(detail: str) -> list[str]:
 IMAGE_FIELD_CANDIDATES = ("image_urls", "image_url", "images", "image", "input_images", "reference_images",
                           "reference_image_urls", "reference_urls", "init_image", "init_images", "source_image")
 OTHER_FIELD_CANDIDATES = ("aspect_ratio", "resolution", "num_images", "quality", "size", "seed", "strength", "style", "enhance_prompt")
+
+
+_ENUM = re.compile(r"^(\w+): .*? is not one of \[(.*)\]", re.S)
+_TYPE = re.compile(r"^(\w+): .*? is not of type '(\w+)'")
+_REQ = re.compile(r"'(\w+)' is a required property")
+_EXTRA = re.compile(r"Additional properties are not allowed \((.*?) (?:was|were) unexpected\)")
+_LOC = re.compile(r"'loc':\s*\[\s*'body',\s*'(\w+)'.*?'msg':\s*'([^']*)'", re.S)
+_TYPED_VALUE = {"string": "x", "integer": 1, "number": 1, "array": [], "boolean": True, "object": {}, "null": None}
+
+
+def _enum_first(raw: str):
+    import ast
+    try:
+        vals = ast.literal_eval("[" + raw + "]")
+        return vals[0] if vals else "x"
+    except (ValueError, SyntaxError):
+        return raw.split(",")[0].strip().strip("'\"")
+
+
+def map_fields(client, model: str, *, max_rounds: int = 40, log_fn=print) -> dict:
+    """Discover a model's request schema by repeatedly sending an invalid request and fixing
+    whatever the validator complains about. prompt stays invalid (a number) as the safety net
+    until every other field is settled; the final valid request, if accepted, is cancelled at once.
+    Returns {"known": {field: description}, "unknown": [candidates the model rejected], "log": [...]}."""
+    from higgsfield_client.exceptions import HiggsfieldClientError
+
+    body: dict = {"prompt": 123}
+    body.update({k: 123 for k in IMAGE_FIELD_CANDIDATES})
+    body.update({k: 123 for k in OTHER_FIELD_CANDIDATES})
+    known: dict[str, str] = {}
+    unknown: list[str] = []
+    prompt_fixed = False
+    for _ in range(max_rounds):
+        try:
+            resp = client._transport.request("POST", model, json=body)
+        except HiggsfieldClientError as e:
+            msg = str(e).strip()
+        except Exception as e:  # noqa: BLE001
+            log_fn(f"stopped: {e}")
+            break
+        else:
+            try:
+                rid = resp.json().get("request_id")
+                if rid:
+                    client.get_request_controller(rid).cancel()
+                    log_fn(f"final request was accepted; cancelled {rid}")
+            except Exception as e:  # noqa: BLE001
+                log_fn(f"accepted but could not cancel: {e}")
+            break
+        log_fn(f"validator: {msg[:160]}")
+        m = _EXTRA.search(msg)
+        if m:
+            for name in re.findall(r"'(\w+)'", m.group(1)):
+                unknown.append(name)
+                body.pop(name, None)
+            continue
+        m = _ENUM.search(msg)
+        if m:
+            field, raw = m.group(1), m.group(2)
+            known[field] = f"one of [{raw}]"
+            body[field] = _enum_first(raw)
+            if field == "prompt":
+                prompt_fixed = True
+            continue
+        m = _TYPE.search(msg)
+        if m:
+            field, typ = m.group(1), m.group(2)
+            known[field] = typ
+            body[field] = _TYPED_VALUE.get(typ, "x")
+            if field == "prompt":
+                prompt_fixed = True
+            continue
+        m = _REQ.search(msg)
+        if m:
+            known[m.group(1)] = known.get(m.group(1), "required")
+            body[m.group(1)] = "x"
+            continue
+        m = _LOC.search(msg)   # pydantic-style list of errors: fix the first
+        if m:
+            field, why = m.group(1), m.group(2)
+            known[field] = why
+            body[field] = [] if "list" in why or "array" in why else "x"
+            if field == "prompt":
+                prompt_fixed = True
+            continue
+        log_fn(f"stopped: unrecognised validator message")
+        break
+    if not prompt_fixed and "prompt" not in known:
+        known["prompt"] = "required (never reached)"
+    for k in list(body):
+        if k not in known and k != "prompt" and k not in unknown:
+            unknown.append(k)   # never complained about: with additionalProperties allowed these are simply ignored
+    return {"known": known, "unknown": unknown}
 
 
 def probe_fields(client, model: str) -> str:

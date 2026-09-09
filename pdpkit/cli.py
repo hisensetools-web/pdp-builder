@@ -230,7 +230,14 @@ def cmd_hf_fields(args) -> int:
     client = higgsfield_client.SyncClient(timeout=30.0)
     for mid in args.model_id:
         print(f"== {mid}")
-        print(higgsfield.probe_fields(client, mid))
+        result = higgsfield.map_fields(client, mid, log_fn=lambda m: print("   ", m))
+        print("fields the model knows:")
+        for k, v in result["known"].items():
+            print(f"   {k:22s} {v}")
+        image_fields = [k for k in result["known"] if k in higgsfield.IMAGE_FIELD_CANDIDATES]
+        print("rejected / ignored candidates:", ", ".join(result["unknown"]) or "none")
+        if image_fields:
+            print(f"\n=> reference-image field: {image_fields[0]}   (set HIGGSFIELD_IMAGE_ARG={image_fields[0]} in .env if different from the default)")
         print()
     return 0
 
