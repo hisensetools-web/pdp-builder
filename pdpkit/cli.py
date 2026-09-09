@@ -36,14 +36,47 @@ def _product_name(product_dir: Path, override: str | None = None) -> str:
     return product_dir.name
 
 
-def _prompts(args) -> list[str]:
+def parse_prompts(text: str) -> list[str]:
+    """Blank-line separated prompts; lines starting with '#' are comments; each prompt is joined to one line."""
+    out = []
+    for block in text.replace("\r\n", "\n").split("\n\n"):
+        lines = [l.strip() for l in block.split("\n") if l.strip() and not l.strip().startswith("#")]
+        if lines:
+            out.append(" ".join(lines))
+    return out
+
+
+def fill_placeholders(prompts: list[str], product_dir: Path | None) -> list[str]:
+    facts = {}
+    if product_dir and (product_dir / "product_summary.json").exists():
+        facts = json.loads((product_dir / "product_summary.json").read_text(encoding="utf-8"))
+    values = {k: str(facts.get(k) or "") for k in ("title", "handle", "vendor", "price", "product_type", "currency")}
+    values["product"] = values["title"]
+    out = []
+    for p in prompts:
+        for k, v in values.items():
+            p = p.replace("{" + k + "}", v)
+        out.append(p)
+    return out
+
+
+def _prompts(args, product_dir: Path | None = None) -> list[str]:
     prompts = list(args.prompt or [])
+    source = None
     if args.prompt_file:
-        text = Path(args.prompt_file).read_text(encoding="utf-8")
-        prompts += [p.strip() for p in text.split("\n\n") if p.strip()]   # blank-line separated prompts
+        source = Path(args.prompt_file)
+    elif not prompts:
+        if not config.PROMPTS_FILE.exists() and config.PROMPTS_EXAMPLE.exists():
+            config.PROMPTS_FILE.write_text(config.PROMPTS_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+            print(f"created {config.PROMPTS_FILE.name} from {config.PROMPTS_EXAMPLE.name}; edit it to change the prompts")
+        if config.PROMPTS_FILE.exists():
+            source = config.PROMPTS_FILE
+    if source:
+        prompts += parse_prompts(source.read_text(encoding="utf-8"))
+        print(f"prompts : {len(prompts)} from {source}")
     if not prompts:
-        raise SystemExit("give at least one --prompt or a --prompt-file")
-    return prompts
+        raise SystemExit(f"no prompts: write them in {config.PROMPTS_FILE} (one per paragraph) or pass --prompt / --prompt-file")
+    return fill_placeholders(prompts, product_dir)
 
 
 # --------------------------------------------------------------------------- commands
@@ -73,11 +106,11 @@ def cmd_generate(args) -> int:
     backend = args.backend or ("cli" if args.photoshoot else config.HIGGSFIELD_BACKEND)
     if backend == "cli":
         from . import higgsfield_cli
-        out = higgsfield_cli.generate(pdir, name, _prompts(args), refs=refs, num_images=args.num, model=args.model,
+        out = higgsfield_cli.generate(pdir, name, _prompts(args, pdir), refs=refs, num_images=args.num, model=args.model,
                                       photoshoot_mode=args.photoshoot, dry_run=args.dry_run)
     else:
         from . import higgsfield
-        out = higgsfield.generate(pdir, name, _prompts(args), refs=refs, num_images=args.num, model=args.model, dry_run=args.dry_run)
+        out = higgsfield.generate(pdir, name, _prompts(args, pdir), refs=refs, num_images=args.num, model=args.model, dry_run=args.dry_run)
     print(f"generated images folder: {out}")
     return 0
 
@@ -125,7 +158,7 @@ def cmd_run(args) -> int:
     print(f"[1/4] grabbed {len(manifest)} images -> {out_dir}")
     name = args.name or data.title or data.handle
     args.product = str(out_dir)
-    if args.prompt or args.prompt_file:
+    if args.prompt or args.prompt_file or config.PROMPTS_FILE.exists() or config.PROMPTS_EXAMPLE.exists():
         cmd_generate(args)
         print("[2/4] generated")
         if not args.skip_upload:
@@ -243,8 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--name", help="override the product name used for folder / Shopify title")
 
     def add_generate_opts(sp):
-        sp.add_argument("--prompt", action="append", help="Higgsfield prompt (repeat for several)")
-        sp.add_argument("--prompt-file", help="text file, prompts separated by blank lines")
+        sp.add_argument("--prompt", action="append", help="Higgsfield prompt (repeat for several); default: prompts.txt in this folder")
+        sp.add_argument("--prompt-file", help="text file, prompts separated by blank lines (default prompts.txt)")
         sp.add_argument("--ref", action="append", help="explicit reference image path (repeat); default: first gallery images")
         sp.add_argument("--num", type=int, help=f"images per prompt (default {config.HIGGSFIELD_NUM_IMAGES})")
         sp.add_argument("--model", help=f"Higgsfield model id (api default {config.HIGGSFIELD_MODEL}; cli default {config.HIGGSFIELD_CLI_MODEL})")

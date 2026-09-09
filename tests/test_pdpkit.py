@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from pdpkit import config, guide, higgsfield, scrape, summary
 
@@ -93,6 +94,32 @@ class ExtractTests(unittest.TestCase):
             self.assertIn("| Black | 49.00 | 89.00 | True |", md)
             facts = json.loads((Path(d) / "product_summary.json").read_text())
             self.assertEqual(facts["title"], "Glow Neck Massager")
+
+
+class PromptFileTests(unittest.TestCase):
+    def test_parse_and_placeholders(self):
+        from pdpkit import cli
+        text = "# comment\nStudio shot of the {title}\nsoft shadow\n\n\nLifestyle {product} at {price}\n# trailing comment\n"
+        prompts = cli.parse_prompts(text)
+        self.assertEqual(prompts, ["Studio shot of the {title} soft shadow", "Lifestyle {product} at {price}"])
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "product_summary.json").write_text(json.dumps({"title": "Glow", "price": "49.00"}))
+            self.assertEqual(cli.fill_placeholders(prompts, Path(d)), ["Studio shot of the Glow soft shadow", "Lifestyle Glow at 49.00"])
+        self.assertEqual(cli.fill_placeholders(["{title}"], None), [""])
+
+    def test_default_prompts_file_is_created_from_example(self):
+        from pdpkit import cli
+        import argparse
+        with tempfile.TemporaryDirectory() as d:
+            example = Path(d) / "prompts.example.txt"; example.write_text("A {title}\n\nB\n")
+            target = Path(d) / "prompts.txt"
+            with mock.patch.object(config, "PROMPTS_FILE", target), mock.patch.object(config, "PROMPTS_EXAMPLE", example):
+                args = argparse.Namespace(prompt=None, prompt_file=None)
+                self.assertEqual(cli._prompts(args, None), ["A ", "B"])
+                self.assertTrue(target.exists())
+                target.write_text("only mine")
+                self.assertEqual(cli._prompts(args, None), ["only mine"])
+                self.assertEqual(cli._prompts(argparse.Namespace(prompt=["inline"], prompt_file=None), None), ["inline"])
 
 
 class GuideTests(unittest.TestCase):

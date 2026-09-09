@@ -5,7 +5,7 @@ Uses the official `higgsfield-client` SDK (https://cloud.higgsfield.ai). Credent
 
 The model and the argument that carries reference URLs are configurable because Higgsfield
 exposes many models (Seedream edit, Soul, Nano Banana, ...) with slightly different argument
-names. Defaults: HIGGSFIELD_MODEL=bytedance/seedream/v4/edit, HIGGSFIELD_IMAGE_ARG=image_urls.
+names. Defaults: HIGGSFIELD_MODEL=openai/gpt-image-2/edit, HIGGSFIELD_IMAGE_ARG=image_urls.
 Check the model card on cloud.higgsfield.ai and change .env if yours differs.
 
 Output goes to <product dir>/<product name>_shopify_PDP_imgs/ with a generation log.
@@ -279,7 +279,7 @@ def explain_error(e: Exception, model: str) -> str:
 # --------------------------------------------------------------------------- model discovery
 CANDIDATE_MODELS = (
     # bytedance seedream family
-    "bytedance/seedream/v4/text-to-image", "bytedance/seedream/v4/edit", "bytedance/seedream/v4/image-to-image",
+    "bytedance/seedream/v4/text-to-image", "openai/gpt-image-2/edit", "bytedance/seedream/v4/image-to-image",
     "bytedance/seedream/v4/image-edit", "bytedance/seedream/v4.5/text-to-image", "bytedance/seedream/v4.5/edit",
     "bytedance/seedream/v4.5/image-to-image", "bytedance/seedream/v5/edit", "bytedance/seedream/v5/image-to-image",
     "bytedance/seedream/v5-lite/edit", "bytedance/seedream-4.5/edit", "bytedance/seedream-4.5/image-to-image",

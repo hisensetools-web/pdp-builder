@@ -51,7 +51,7 @@ ANTHROPIC_ENABLED = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("
 
 # --- Higgsfield Cloud API ---------------------------------------------------
 # Credentials: HF_KEY="key:secret" (or HF_API_KEY + HF_API_SECRET), from https://cloud.higgsfield.ai
-HIGGSFIELD_MODEL = os.environ.get("HIGGSFIELD_MODEL", "bytedance/seedream/v4/edit")
+HIGGSFIELD_MODEL = os.environ.get("HIGGSFIELD_MODEL", "openai/gpt-image-2/edit")   # confirmed to exist on platform.higgsfield.ai (hf-models)
 HIGGSFIELD_IMAGE_ARG = os.environ.get("HIGGSFIELD_IMAGE_ARG", "image_urls")   # arg that carries reference URLs
 HIGGSFIELD_MAX_REFS = int(os.environ.get("HIGGSFIELD_MAX_REFS", "6"))
 HIGGSFIELD_ASPECT = os.environ.get("HIGGSFIELD_ASPECT", "1:1")
@@ -76,6 +76,12 @@ SHOPIFY_ADMIN_TOKEN = os.environ.get("SHOPIFY_ADMIN_TOKEN", "").strip()  # shpat
 SHOPIFY_API_VERSION = os.environ.get("SHOPIFY_API_VERSION", "2025-07")
 SHOPIFY_TOKEN_CACHE = Path(os.environ.get("SHOPIFY_TOKEN_CACHE", ROOT / "data" / "shopify_token.json"))
 SHOPIFY_REQUIRED_SCOPES = ("write_products", "write_files")
+
+# Prompts for `generate` when no --prompt / --prompt-file is given: one prompt per paragraph
+# (blank-line separated), '#' lines are comments, {title} {handle} {vendor} {price} {product_type}
+# are filled from the grabbed product. prompts.txt is yours (gitignored); prompts.example.txt is the starter.
+PROMPTS_FILE = Path(os.environ.get("PDP_PROMPTS_FILE", ROOT / "prompts.txt"))
+PROMPTS_EXAMPLE = ROOT / "prompts.example.txt"
 
 # --- Guide ------------------------------------------------------------------
 PDP_TEMPLATE = os.environ.get("PDP_TEMPLATE", "").strip()   # default reference PDP template path

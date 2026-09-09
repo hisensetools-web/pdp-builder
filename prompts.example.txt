@@ -1,0 +1,14 @@
+# Prompts for `python pdp.py generate` (and `run`). One prompt per paragraph: separate prompts with a
+# blank line. Lines starting with # are ignored. Every prompt runs against the same reference images
+# (competitor_imgs, gallery first) and produces --num images (default 4).
+# Placeholders filled from the grabbed product: {title} {handle} {vendor} {price} {product_type}.
+# This file is yours: edit it freely, it is not tracked by git. prompts.example.txt is the starter copy.
+
+Clean e-commerce studio product shot of the {title} on a pure white background,
+soft shadow, centered, product exactly as in the reference images, no text, no logo, 1:1.
+
+Lifestyle photo of the {title} in use in a bright modern home, natural daylight,
+shallow depth of field, product exactly as in the reference images, no text.
+
+Close-up detail shot of the {title} showing material and build quality,
+soft studio lighting, neutral background, product exactly as in the reference images.

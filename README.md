@@ -29,10 +29,11 @@ Update later with `git pull`. Tests: `python -m unittest discover -s tests`.
 
 ```bash
 python pdp.py grab https://competitor.com/products/glow-neck-massager
-python pdp.py generate glow-neck-massager --prompt "Studio shot on white, soft shadow, same product" --prompt "Lifestyle shot, woman on sofa using it"
+python pdp.py generate glow-neck-massager                     # prompts from prompts.txt (one per paragraph, {title} etc. filled in)
+python pdp.py generate glow-neck-massager --prompt "Studio shot on white, soft shadow, same product"   # or inline
 python pdp.py upload glow-neck-massager                       # creates a DRAFT product with the competitor title
 python pdp.py guide glow-neck-massager --template templates/pdp_template.md
-python pdp.py run https://competitor.com/products/x --prompt "..." --template templates/pdp_template.md   # all four
+python pdp.py run https://competitor.com/products/x --template templates/pdp_template.md   # all four, prompts from prompts.txt
 python pdp.py list                                            # what has been grabbed / generated / uploaded
 ```
 
@@ -71,10 +72,12 @@ whose backend prompt enhancer is built for exactly this; without `--photoshoot` 
 with every reference passed as `--image` (default model `nano_banana_2`, change with `HIGGSFIELD_CLI_MODEL` or `--model`).
 `generate --backend api` uses the developer API on platform.higgsfield.ai with `HF_KEY=key:secret` from
 cloud.higgsfield.ai; `HIGGSFIELD_MODEL` / `HIGGSFIELD_IMAGE_ARG` pick the model and the request field that carries the
-reference-image URLs (default `bytedance/seedream/v4/edit` / `image_urls`). `python pdp.py hf-check [--backend cli|api]`
+reference-image URLs (default `openai/gpt-image-2/edit` / `image_urls`). `python pdp.py hf-check [--backend cli|api]`
 verifies the credentials without spending credits, and `generate --dry-run` prints the exact request or command.
 Shopify pages are read through `/products/<handle>.json`; other platforms fall back
 to HTML parsing and, when the page is JavaScript-rendered, a headless Chromium pass (`grab --browser` forces it).
-Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `--prompt-file` (blank-line separated
-prompts), `upload --handle x` / `--product-id N` (attach to an existing product), `upload --with-description`,
+**Prompts** live in `prompts.txt` in this folder (created from `prompts.example.txt` on first use, then yours to edit,
+not tracked by git): one prompt per paragraph, `#` lines ignored, `{title}` `{handle}` `{vendor}` `{price}`
+`{product_type}` filled from the grabbed product. `--prompt` / `--prompt-file` override it for one run.
+Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `upload --handle x` / `--product-id N` (attach to an existing product), `upload --with-description`,
 `--dry-run` on `generate` and `upload`. A starter template is in `templates/pdp_template.example.md`.
