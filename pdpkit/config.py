@@ -58,6 +58,7 @@ HIGGSFIELD_MAX_REFS = int(os.environ.get("HIGGSFIELD_MAX_REFS", "6"))
 HIGGSFIELD_ASPECT = os.environ.get("HIGGSFIELD_ASPECT", "1:1")
 HIGGSFIELD_RESOLUTION = os.environ.get("HIGGSFIELD_RESOLUTION", "2K")
 HIGGSFIELD_NUM_IMAGES = int(os.environ.get("HIGGSFIELD_NUM_IMAGES", "4"))
+HIGGSFIELD_QUALITY = os.environ.get("HIGGSFIELD_QUALITY", "high")        # GPT Image models: low / medium / high
 HIGGSFIELD_EXTRA_ARGS = os.environ.get("HIGGSFIELD_EXTRA_ARGS", "")   # JSON object merged into every request
 # Backend: "api" = platform.higgsfield.ai with HF_KEY (higgsfield-client); "cli" = the `higgsfield` CLI on your
 # normal account (`higgsfield auth login`). Default: api when HF_KEY is set, otherwise cli.

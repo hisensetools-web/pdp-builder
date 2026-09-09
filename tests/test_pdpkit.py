@@ -181,10 +181,14 @@ class HiggsfieldTests(unittest.TestCase):
             self.assertEqual([p.name for p in refs], ["gallery_01.jpg", "gallery_02.jpg"])
 
     def test_build_arguments_and_result_urls(self):
-        args = higgsfield.build_arguments("studio shot", ["https://u/1.jpg"], num_images=2)
+        args = higgsfield.build_arguments("studio shot", ["https://u/1.jpg"], num_images=2, model="some/generic/model")
         self.assertEqual(args["prompt"], "studio shot")
         self.assertEqual(args[config.HIGGSFIELD_IMAGE_ARG], ["https://u/1.jpg"])
         self.assertEqual(args["num_images"], 2)
+        gpt = higgsfield.build_arguments("studio shot", ["https://u/1.jpg"], num_images=2, model="openai/gpt-image-2/edit")
+        self.assertEqual(set(gpt), {"prompt", "image_urls", "quality"})   # nothing the validator did not acknowledge
+        self.assertEqual(gpt["quality"], config.HIGGSFIELD_QUALITY)
+        self.assertEqual(higgsfield.profile_for("openai/gpt-image-2/edit")["per_call"], 1)
         self.assertEqual(higgsfield.result_image_urls({"images": [{"url": "https://a"}, {"url": "https://a"}], "image": {"url": "https://b"}}), ["https://a", "https://b"])
 
     def test_explain_error_classifies_by_status_not_text(self):

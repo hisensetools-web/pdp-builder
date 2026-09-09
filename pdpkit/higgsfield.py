@@ -123,14 +123,38 @@ def upload_references(client, refs: list[Path]) -> list[str]:
     return urls
 
 
-def build_arguments(prompt: str, ref_urls: list[str], *, num_images: int | None = None) -> dict:
-    args = {
+# Request shapes verified with `hf-fields` (the validator names the fields it knows). Models not listed
+# get the generic shape. "per_call" = images one request returns; generate() repeats the request otherwise.
+MODEL_PROFILES = {
+    "openai/gpt-image-2/edit": {"fields": ("prompt", "image_urls", "quality"), "per_call": 1},
+    "openai/gpt-image-1.5/edit": {"fields": ("prompt", "image_urls", "quality"), "per_call": 1},
+}
+GENERIC_PROFILE = {"fields": ("prompt", "image_arg", "aspect_ratio", "resolution", "num_images"), "per_call": None}
+
+
+def profile_for(model: str) -> dict:
+    return MODEL_PROFILES.get(model, GENERIC_PROFILE)
+
+
+def build_arguments(prompt: str, ref_urls: list[str], *, num_images: int | None = None, model: str | None = None) -> dict:
+    model = model or config.HIGGSFIELD_MODEL
+    fields = profile_for(model)["fields"]
+    candidates = {
         "prompt": prompt,
-        config.HIGGSFIELD_IMAGE_ARG: ref_urls,
+        "image_arg": (config.HIGGSFIELD_IMAGE_ARG, ref_urls),
+        "image_urls": ("image_urls", ref_urls),
+        "quality": config.HIGGSFIELD_QUALITY,
         "aspect_ratio": config.HIGGSFIELD_ASPECT,
         "resolution": config.HIGGSFIELD_RESOLUTION,
         "num_images": num_images or config.HIGGSFIELD_NUM_IMAGES,
     }
+    args = {}
+    for f in fields:
+        v = candidates[f]
+        if isinstance(v, tuple):
+            args[v[0]] = v[1]
+        else:
+            args[f] = v
     if config.HIGGSFIELD_EXTRA_ARGS:
         try:
             args.update(json.loads(config.HIGGSFIELD_EXTRA_ARGS))
@@ -187,18 +211,22 @@ def generate(product_dir: Path, product_name: str, prompts: list[str], *, refs: 
     entries = json.loads(log_path.read_text()) if log_path.exists() else []
     existing = sum(1 for p in out.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
 
+    n = num_images or config.HIGGSFIELD_NUM_IMAGES
+    per_call = profile_for(model)["per_call"]
+    repeats = 1 if per_call is None else max(1, -(-n // per_call))   # ceil(n / per_call)
     if dry_run:
-        print(json.dumps({"model": model, "references": [p.name for p in refs],
-                          "arguments": build_arguments(prompts[0], ["<uploaded-url>"] * len(refs), num_images=num_images)}, indent=2))
+        print(json.dumps({"model": model, "references": [p.name for p in refs], "requests_per_prompt": repeats,
+                          "arguments": build_arguments(prompts[0], ["<uploaded-url>"] * len(refs), num_images=num_images, model=model)}, indent=2))
         return out
 
     try:
         ref_urls = upload_references(client, refs)
     except Exception as e:  # noqa: BLE001
         raise SystemExit(explain_error(e, model)) from e
-    for i, prompt in enumerate(prompts, 1):
-        args = build_arguments(prompt, ref_urls, num_images=num_images)
-        log.info("prompt %d/%d -> %s", i, len(prompts), model)
+    jobs = [(p, k) for p in prompts for k in range(repeats)]
+    for i, (prompt, k) in enumerate(jobs, 1):
+        args = build_arguments(prompt, ref_urls, num_images=num_images, model=model)
+        log.info("request %d/%d -> %s", i, len(jobs), model)
         started = time.time()
         try:
             result = client.subscribe(model, arguments=args)
@@ -216,7 +244,7 @@ def generate(product_dir: Path, product_name: str, prompts: list[str], *, refs: 
             path = download(url, out / f"gen_{existing:02d}.jpg")
             saved.append(path.name)
             log.info("saved %s", path.name)
-        entries.append({"prompt": prompt, "model": model, "references": [p.name for p in refs], "arguments": {k: v for k, v in args.items() if k != config.HIGGSFIELD_IMAGE_ARG},
+        entries.append({"prompt": prompt, "model": model, "references": [p.name for p in refs], "arguments": {k: v for k, v in args.items() if not isinstance(v, list)},
                         "result_urls": urls, "files": saved, "seconds": round(time.time() - started, 1),
                         "at": datetime.now(timezone.utc).isoformat()})
         log_path.write_text(json.dumps(entries, indent=2))
@@ -407,6 +435,11 @@ def map_fields(client, model: str, *, max_rounds: int = 40, log_fn=print) -> dic
             known[m.group(1)] = known.get(m.group(1), "required")
             body[m.group(1)] = "x"
             continue
+        m = re.search(r"^(\w+): .*should be non-empty", msg)
+        if m:
+            known[m.group(1)] = known.get(m.group(1), "array") + ", non-empty"
+            log_fn("stopped: the only remaining complaint needs real data (a non-empty reference list); schema mapped far enough")
+            break
         m = _LOC.search(msg)   # pydantic-style list of errors: fix the first
         if m:
             field, why = m.group(1), m.group(2)
