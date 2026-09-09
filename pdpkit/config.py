@@ -6,6 +6,7 @@ only disables the command that needs it.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -87,6 +88,31 @@ PROMPTS_EXAMPLE = ROOT / "prompts.example.txt"
 BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles
 BRAND_SUFFIX = os.environ.get("BRAND_SUFFIX", "").strip()               # optional, e.g. "by SoleneLife" instead of a prefix
 GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "").strip() in ("1", "true", "yes")   # default: gallery (top-of-fold) only
+
+# --- Pricing (same on every product): one-time three-tier bundle, tier 2 pre-selected ------------
+# Override with PDP_PRICING as JSON: [{"name": "...", "price": 39.95, "compare_at": 79.90}, ...]
+_DEFAULT_PRICING = [
+    {"name": "Buy 1", "badge": "Standard Price", "price": 39.95, "compare_at": 79.90},
+    {"name": "Buy 2 Get 1 Free", "badge": "FOR BEST RESULTS", "price": 79.90, "compare_at": 119.85, "default": True},
+    {"name": "Buy 3 Get 2 Free", "badge": "MOST VALUE", "price": 119.85, "compare_at": 199.75},
+]
+try:
+    PRICING_TIERS = json.loads(os.environ["PDP_PRICING"]) if os.environ.get("PDP_PRICING") else _DEFAULT_PRICING
+except ValueError:
+    PRICING_TIERS = _DEFAULT_PRICING
+PRICING_OPTION_NAME = os.environ.get("PDP_PRICING_OPTION", "Bundle")   # the Shopify option that holds the three tiers
+CURRENCY_SYMBOL = os.environ.get("PDP_CURRENCY_SYMBOL", "$")
+
+
+def pricing_text() -> str:
+    """One line for the Product Brief (B11): 'Buy 1 $39.95 (compare-at $79.90) · ...'."""
+    parts = []
+    for t in PRICING_TIERS:
+        pct = round((1 - t["price"] / t["compare_at"]) * 100) if t.get("compare_at") else None
+        parts.append(f"{t['name']} {CURRENCY_SYMBOL}{t['price']:.2f} (compare-at {CURRENCY_SYMBOL}{t['compare_at']:.2f}"
+                     + (f", -{pct}%" if pct else "") + (", default" if t.get("default") else "") + ")")
+    return " · ".join(parts)
+
 
 # --- Guide ------------------------------------------------------------------
 PDP_TEMPLATE = os.environ.get("PDP_TEMPLATE", str(ROOT / "templates" / "universal_pdp_template.md")).strip()

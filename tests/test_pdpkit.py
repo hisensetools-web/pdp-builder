@@ -106,6 +106,13 @@ class BrandingTests(unittest.TestCase):
         with mock.patch.object(config, "BRAND_NAME", "SoleneLife"), mock.patch.object(config, "BRAND_SUFFIX", "by SoleneLife"):
             self.assertEqual(config.our_title("Ruffs Diffuser", "Ruffs", ""), "Diffuser by SoleneLife")
 
+    def test_pricing_text(self):
+        with mock.patch.object(config, "PRICING_TIERS", config._DEFAULT_PRICING), mock.patch.object(config, "CURRENCY_SYMBOL", "$"):
+            txt = config.pricing_text()
+        self.assertIn("Buy 1 $39.95 (compare-at $79.90, -50%)", txt)
+        self.assertIn("Buy 2 Get 1 Free $79.90 (compare-at $119.85, -33%, default)", txt)
+        self.assertIn("Buy 3 Get 2 Free $119.85 (compare-at $199.75, -40%)", txt)
+
     def test_gallery_only_selection(self):
         refs = [scrape.ImageRef("a", kind="gallery"), scrape.ImageRef("b", kind="page")]
         self.assertEqual([r.url for r in scrape.select_for_download(refs, False)], ["a"])
@@ -144,6 +151,14 @@ class GuideTests(unittest.TestCase):
     def test_markdown_to_pdf_and_mechanical_guide(self):
         md = guide.mechanical_guide("Glow", "## Hero\n- headline\n\n| a | b |\n|---|---|\n| 1 | 2 |", "# Glow\n**bold** text", ["gen_01.jpg"])
         self.assertIn("gen_01.jpg", md)
+        self.assertIn("Instructions for Fudge", md)
+        self.assertIn("Buy 2 Get 1 Free", md)
+        with tempfile.TemporaryDirectory() as d:
+            gen = Path(d) / "g"; gen.mkdir()
+            (gen / "gen_01.jpg").write_bytes(b"x"); (gen / "gen_02.jpg").write_bytes(b"x")
+            (gen / "generation_log.json").write_text(json.dumps([{"prompt": "studio shot on white", "files": ["gen_01.jpg"]}]))
+            inv = guide.image_inventory(Path(d), gen)
+            self.assertEqual(inv, ["- `gen_01.jpg`: studio shot on white", "- `gen_02.jpg`"])
         with tempfile.TemporaryDirectory() as d:
             pdf = guide.markdown_to_pdf(md, Path(d) / "g.pdf", "t")
             self.assertGreater(pdf.stat().st_size, 1000)

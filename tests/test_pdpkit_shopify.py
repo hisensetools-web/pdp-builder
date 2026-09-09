@@ -48,6 +48,10 @@ class FakeShopify(http.server.BaseHTTPRequestHandler):
             return self._send(200, {"data": {"productByHandle": None}})
         if "productCreate(" in q:
             return self._send(200, {"data": {"productCreate": {"product": {"id": "gid://shopify/Product/777", "handle": "glow", "title": v["product"]["title"], "status": "DRAFT"}, "userErrors": []}}})
+        if "productVariantsBulkCreate" in q:
+            return self._send(200, {"data": {"productVariantsBulkCreate": {"productVariants": [
+                {"id": f"gid://shopify/ProductVariant/{i}", "title": x["optionValues"][0]["name"], "price": x["price"], "compareAtPrice": x["compareAtPrice"]}
+                for i, x in enumerate(v["variants"])], "userErrors": []}}})
         if "stagedUploadsCreate" in q:
             fn = v["input"][0]["filename"]
             base = f"http://127.0.0.1:{self.server.server_port}"
@@ -88,7 +92,13 @@ class UploadFlowTests(unittest.TestCase):
         self.assertEqual(len(media), 2)
         self.assertEqual(media[0]["alt"], "Glow gen_01")
         kinds = [c[1] for c in CALLS if c[0] == "gql"]
-        self.assertEqual(kinds, ["productByHandle", "productCreate", "stagedUploadsCreate", "stagedUploadsCreate", "productCreateMedia"])
+        self.assertEqual(kinds, ["productByHandle", "productCreate", "productVariantsBulkCreate", "stagedUploadsCreate", "stagedUploadsCreate", "productCreateMedia"])
+        create = [c for c in CALLS if c[0] == "gql" and c[1] == "productCreate"][0][2]["product"]
+        self.assertEqual(create["productOptions"][0]["values"], [{"name": "Buy 1"}, {"name": "Buy 2 Get 1 Free"}, {"name": "Buy 3 Get 2 Free"}])
+        bulk = [c for c in CALLS if c[0] == "gql" and c[1] == "productVariantsBulkCreate"][0][2]
+        self.assertEqual(bulk["strategy"], "REMOVE_STANDALONE_VARIANT")
+        self.assertEqual([(x["price"], x["compareAtPrice"]) for x in bulk["variants"]], [("39.95", "79.90"), ("79.90", "119.85"), ("119.85", "199.75")])
+        self.assertEqual(product["variants"][1]["title"], "Buy 2 Get 1 Free")
         staged = [c for c in CALLS if c[0] == "staged"]
         self.assertEqual(len(staged), 2)
         self.assertTrue(all(c[3].startswith("multipart/form-data") for c in staged))

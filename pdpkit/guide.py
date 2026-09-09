@@ -7,6 +7,7 @@ still produces a usable document.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -55,6 +56,10 @@ with what to replace it with before publish.
 ## 4. QA checklist
 The template's Appendix D checklist condensed to the items relevant to the blocks marked BUILD.
 
+Brand rules: colors keep the template's roles but the values are chosen per product to match its imagery (say which
+hex values you chose and why, derived from the product's look). There are never free gifts: the offer is the three
+bundle tiers only, so drop every gift line, seal, value-stack gift row and the gift legal line.
+
 Rules: never mention the competitor by name anywhere in the guide; use only facts from product_summary plus the
 template; mark anything invented [ASSUMED]; Markdown only, no preamble, no closing remarks."""
 
@@ -98,7 +103,8 @@ def claude_guide(template_text: str, summary_md: str, generated_files: list[str]
     client = anthropic.Anthropic()
     user = (
         "## Reference PDP template\n\n" + template_text.strip() +
-        f"\n\n## Our brand\n\nBrand name: {brand or config.BRAND_NAME}\nOur product title (Shopify title): {our_title}\n" +
+        f"\n\n## Our brand\n\nBrand name: {brand or config.BRAND_NAME}\nOur product title (Shopify title): {our_title}\n"
+        f"Pricing (Brief B11, fixed for every product; the Shopify product has one variant per tier): {config.pricing_text()}\n" +
         "\n\n## product_summary (scraped from the competitor page)\n\n" + summary_md.strip() +
         "\n\n## Generated image files available\n\n" + ("\n".join(generated_files) if generated_files else "(none yet)")
     )
@@ -121,23 +127,72 @@ def claude_guide(template_text: str, summary_md: str, generated_files: list[str]
     return "".join(b.text for b in msg.content if b.type == "text").strip() or None
 
 
-def mechanical_guide(product_name: str, template_text: str, summary_md: str, generated_files: list[str]) -> str:
+def image_inventory(product_dir: Path, gen_dir: Path) -> list[str]:
+    """One line per generated image: file name + the prompt that produced it (from generation_log.json)."""
+    lines = []
+    log_path = gen_dir / "generation_log.json"
+    by_file: dict[str, str] = {}
+    if log_path.exists():
+        try:
+            for entry in json.loads(log_path.read_text(encoding="utf-8")):
+                for f in entry.get("files", []):
+                    by_file[f] = entry.get("prompt", "")
+        except ValueError:
+            pass
+    for f in sorted(p.name for p in gen_dir.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")) if gen_dir.exists() else []:
+        desc = by_file.get(f, "")
+        lines.append(f"- `{f}`" + (f": {desc[:160]}" if desc else ""))
+    return lines
+
+
+def mechanical_guide(product_name: str, template_text: str, summary_md: str, generated_files: list[str],
+                     image_lines: list[str] | None = None) -> str:
+    """The guide when Claude is not used: Fudge does the writing. Instructions first, then our brand,
+    pricing and images, then the competitor facts, then the full template."""
+    image_lines = image_lines if image_lines is not None else [f"- `{f}`" for f in generated_files]
     return "\n".join([
         f"# PDP build guide: {product_name}",
         "",
-        "> Assembled without Claude (no ANTHROPIC_API_KEY). Fudge: follow the template below, using the product summary for facts.",
+        "## Instructions for Fudge",
         "",
-        "## Reference PDP template",
+        "1. Read **Our brand and offer** and **Product facts** below, then fill the Product Brief (B1-B16) of the",
+        "   **Universal PDP Template** that follows, for this product. Use our brand name everywhere; never the",
+        "   competitor's brand, store name or review text. Product facts are what the competitor's page says about the",
+        "   product; rewrite everything in our voice per the template's global copy rules.",
+        "2. Build the page block by block, BLOCK 00 to BLOCK 21, following each block card: layout, styling, copy",
+        "   formula, build prompt, DO NOT list. Pricing is fixed (below) and the Shopify product already has one variant",
+        "   per tier, so Block 06 maps tiers to variants.",
+        "3. A block whose Brief field has no real data (clinician counts, studies, mission partner, cross-sell products)",
+        "   is dropped, not filled with invented numbers. Never invent statistics, review counts or endorsements.",
+        "4. Use the generated images listed below for every image slot (hero gallery, how-it-works, UGC, endorsement",
+        "   background). Each line says what the image shows. If a slot has no suitable image, leave it for a later",
+        "   Higgsfield run and say so in your notes.",
+        "5. Unverifiable benefit claims end with * and are resolved once by the footer disclaimer, per the template.",
+        "6. Colors: keep the template's color ROLES (ink, action, accent, highlight, promo, surface, tab, bg) but choose",
+        "   the VALUES per product so the page matches the product's imagery (pick from the generated images' palette;",
+        "   one saturated action color, calm off-white surfaces, as the design system describes).",
+        "7. No free gifts on any product: our offer is the three-tier bundle only. Drop every free-gift line, seal, badge,",
+        "   value-stack gift row and the free-gift legal line; tiers 2 and 3 are sold on savings alone.",
         "",
-        template_text.strip(),
+        "## Our brand and offer",
         "",
-        "## Generated images",
+        f"- Brand: **{config.BRAND_NAME}**",
+        f"- Product title (Shopify title): **{product_name}**",
+        f"- Offer: one-time purchase, three tiers, tier 2 pre-selected. {config.pricing_text()}",
+        f"- Shopify: the product is created as a DRAFT with option \"{config.PRICING_OPTION_NAME}\" holding the three tiers",
+        "  and the generated images attached as product media.",
         "",
-        *([f"- {f}" for f in generated_files] or ["- (none yet)"]),
+        "## Generated images (already uploaded to the Shopify product)",
         "",
-        "## product_summary",
+        *(image_lines or ["- none yet: run `python pdp.py generate <product>` first"]),
+        "",
+        "## Product facts (scraped from the competitor page; facts only, rewrite all copy)",
         "",
         summary_md.strip(),
+        "",
+        "---",
+        "",
+        template_text.strip(),
     ])
 
 
@@ -232,7 +287,8 @@ def build_guide(product_dir: Path, product_name: str, template_path: Path, *, us
     template_text = read_template(template_path)
     gen_dir = product_dir / config.generated_dir_name(product_name)
     generated = sorted(p.name for p in gen_dir.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")) if gen_dir.exists() else []
-    md = (claude_guide(template_text, summary_md, generated, our_title=product_name) if use_claude else None) or mechanical_guide(product_name, template_text, summary_md, generated)
+    md = (claude_guide(template_text, summary_md, generated, our_title=product_name) if use_claude else None) \
+        or mechanical_guide(product_name, template_text, summary_md, generated, image_inventory(product_dir, gen_dir))
     slug = config.slugify(product_name)
     (product_dir / f"{slug}_fudge_guide.md").write_text(md, encoding="utf-8")
     return markdown_to_pdf(md, product_dir / f"{slug}_fudge_guide.pdf", f"PDP build guide: {product_name}")

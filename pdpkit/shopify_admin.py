@@ -58,6 +58,14 @@ query whoami {
   currentAppInstallation { accessScopes { handle } }
 }"""
 
+VARIANTS_BULK_CREATE = """
+mutation productVariantsBulkCreate($productId: ID!, $strategy: ProductVariantsBulkCreateStrategy, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkCreate(productId: $productId, strategy: $strategy, variants: $variants) {
+    productVariants { id title price compareAtPrice }
+    userErrors { field message }
+  }
+}"""
+
 PRODUCT_BY_HANDLE = """
 query productByHandle($handle: String!) {
   productByHandle(handle: $handle) { id title status }
@@ -142,7 +150,11 @@ class ShopifyAdmin:
     def find_product(self, handle: str) -> dict | None:
         return self.gql(PRODUCT_BY_HANDLE, {"handle": handle}).get("productByHandle")
 
-    def create_draft_product(self, title: str, description_html: str = "", vendor: str = "", product_type: str = "", tags: list[str] | None = None) -> dict:
+    def create_draft_product(self, title: str, description_html: str = "", vendor: str = "", product_type: str = "",
+                             tags: list[str] | None = None, tiers: list[dict] | None = None) -> dict:
+        """DRAFT product with one option (PRICING_OPTION_NAME) and one variant per pricing tier, each with
+        its price and compare-at price. tiers=[] creates a plain single-variant product."""
+        tiers = config.PRICING_TIERS if tiers is None else tiers
         product = {"title": title, "status": "DRAFT", "descriptionHtml": description_html}
         if vendor:
             product["vendor"] = vendor
@@ -150,10 +162,20 @@ class ShopifyAdmin:
             product["productType"] = product_type
         if tags:
             product["tags"] = tags
+        if tiers:
+            product["productOptions"] = [{"name": config.PRICING_OPTION_NAME, "values": [{"name": t["name"]} for t in tiers]}]
         data = self.gql(PRODUCT_CREATE, {"product": product})["productCreate"]
         if data["userErrors"]:
             raise RuntimeError(f"productCreate: {data['userErrors']}")
-        return data["product"]
+        created = data["product"]
+        if tiers:
+            variants = [{"price": f"{t['price']:.2f}", "compareAtPrice": f"{t['compare_at']:.2f}" if t.get("compare_at") else None,
+                         "optionValues": [{"optionName": config.PRICING_OPTION_NAME, "name": t["name"]}]} for t in tiers]
+            vdata = self.gql(VARIANTS_BULK_CREATE, {"productId": created["id"], "strategy": "REMOVE_STANDALONE_VARIANT", "variants": variants})["productVariantsBulkCreate"]
+            if vdata["userErrors"]:
+                raise RuntimeError(f"productVariantsBulkCreate: {vdata['userErrors']}")
+            created["variants"] = vdata["productVariants"]
+        return created
 
     # -- media ----------------------------------------------------------------
     def staged_upload(self, path: Path) -> str:

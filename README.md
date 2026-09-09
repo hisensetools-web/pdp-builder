@@ -96,3 +96,16 @@ hands it to Claude together with the product summary and produces the per-produc
 Product Brief, then for every block BUILD or DROP, the final copy, which generated image goes where, and the block's
 build prompt with our values. Keep the PDF itself next to it for the reference screenshots (PDFs in `templates/` are
 not committed).
+
+## Offer and pricing
+
+Fixed on every product, one-time purchase, no subscriptions, no free gifts:
+
+| tier | price | compare-at |
+|---|---|---|
+| Buy 1 | $39.95 | $79.90 |
+| Buy 2 Get 1 Free (default) | $79.90 | $119.85 |
+| Buy 3 Get 2 Free | $119.85 | $199.75 |
+
+`upload` creates the draft product with a "Bundle" option and one variant per tier carrying these prices, and the
+guide states them as the Brief's B11 so Fudge's Block 06 maps tiers to variants. Override with `PDP_PRICING` in `.env`.
