@@ -289,6 +289,9 @@ def explain_error(e: Exception, model: str) -> str:
         return f"unexpected response shape from Higgsfield (missing {text}); run with -v and share the log."
     code = _status_code(e)
     low = text.lower()
+    if "credit" in low or "balance" in low or code == 402:
+        return ("Higgsfield Cloud reports no API credits on this account (the API balance at cloud.higgsfield.ai is separate "
+                "from the credits in the higgsfield.ai app). Top up under Billing on cloud.higgsfield.ai, then retry.")
     if code in (401, 403) or "unauthorized" in low or "invalid api key" in low:
         return (f"Higgsfield rejected the credentials (HTTP {code}: {text[:200]}). HF_KEY must be the API key *id* and *secret* "
                 "from https://cloud.higgsfield.ai (Settings > API keys), joined with a colon, not a key from the higgsfield.ai "
@@ -300,8 +303,6 @@ def explain_error(e: Exception, model: str) -> str:
     if code in (400, 422) or "validation" in low:
         return (f"Higgsfield rejected the arguments for '{model}': {text[:300]}. Compare with the model's API example on cloud.higgsfield.ai; "
                 "adjust HIGGSFIELD_IMAGE_ARG / HIGGSFIELD_ASPECT / HIGGSFIELD_RESOLUTION or drop fields with HIGGSFIELD_EXTRA_ARGS.")
-    if code == 402 or "credit" in low or "balance" in low:
-        return "Higgsfield reports no credits left on this key."
     return text
 
 

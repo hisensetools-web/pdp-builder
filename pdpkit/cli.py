@@ -44,8 +44,9 @@ def _product_name(product_dir: Path, override: str | None = None) -> str:
 
 def parse_prompts(text: str) -> list[str]:
     """Blank-line separated prompts; lines starting with '#' are comments; each prompt is joined to one line."""
+    import re
     out = []
-    for block in text.replace("\r\n", "\n").split("\n\n"):
+    for block in re.split(r"\n[ \t]*\n", text.replace("\r\n", "\n").replace("\ufeff", "")):
         lines = [l.strip() for l in block.split("\n") if l.strip() and not l.strip().startswith("#")]
         if lines:
             out.append(" ".join(lines))

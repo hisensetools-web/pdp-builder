@@ -123,7 +123,7 @@ class BrandingTests(unittest.TestCase):
 class PromptFileTests(unittest.TestCase):
     def test_parse_and_placeholders(self):
         from pdpkit import cli
-        text = "# comment\nStudio shot of the {title}\nsoft shadow\n\n\nLifestyle {product} at {price}\n# trailing comment\n"
+        text = "\ufeff# comment\nStudio shot of the {title}\nsoft shadow\n  \n\nLifestyle {product} at {price}\n# trailing comment\n"
         prompts = cli.parse_prompts(text)
         self.assertEqual(prompts, ["Studio shot of the {title} soft shadow", "Lifestyle {product} at {price}"])
         with tempfile.TemporaryDirectory() as d:
@@ -207,6 +207,7 @@ class HiggsfieldTests(unittest.TestCase):
         self.assertIn("HIGGSFIELD_MODEL", higgsfield.explain_error(client_error(404, "Not Found"), "some/model"))
         self.assertIn("HIGGSFIELD_IMAGE_ARG", higgsfield.explain_error(client_error(422, "image_urls field required"), "m"))
         self.assertIn("credits", higgsfield.explain_error(client_error(402, "Insufficient balance"), "m"))
+        self.assertIn("credits", higgsfield.explain_error(client_error(403, "not_enough_credits"), "m"))
 
     def test_upload_bytes_tries_header_shapes_and_keeps_url_exact(self):
         import http.server, threading
