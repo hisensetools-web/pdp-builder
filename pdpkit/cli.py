@@ -190,6 +190,18 @@ def cmd_hf_models(args) -> int:
     return 0 if found else 1
 
 
+def cmd_hf_fields(args) -> int:
+    """Print the validator's answer to a deliberately invalid request: names the fields a model knows."""
+    import higgsfield_client
+    from . import higgsfield
+    client = higgsfield_client.SyncClient(timeout=30.0)
+    for mid in args.model_id:
+        print(f"== {mid}")
+        print(higgsfield.probe_fields(client, mid))
+        print()
+    return 0
+
+
 def cmd_shopify_check(args) -> int:
     """Mint/verify the Admin API token and confirm the app has the scopes `upload` needs."""
     from . import shopify_admin
@@ -290,6 +302,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("hf-models", help="find which Higgsfield model ids exist (free: empty requests only)")
     s.add_argument("model_id", nargs="*", help="ids to probe (default: a built-in list of likely image models)")
     s.set_defaults(func=cmd_hf_models)
+
+    s = sub.add_parser("hf-fields", help="show which request fields a Higgsfield model accepts (free: invalid request only)")
+    s.add_argument("model_id", nargs="+")
+    s.set_defaults(func=cmd_hf_fields)
 
     s = sub.add_parser("shopify-check", help="verify the Shopify app credentials and scopes (mints the token if needed)")
     s.set_defaults(func=cmd_shopify_check)

@@ -324,3 +324,26 @@ def required_fields(detail: str) -> list[str]:
     import re
     names = re.findall(r"'loc':\s*\[\s*'body',\s*'([^']+)'", detail) or re.findall(r'"loc":\s*\[\s*"body",\s*"([^"]+)"', detail)
     return list(dict.fromkeys(names))
+
+
+IMAGE_FIELD_CANDIDATES = ("image_urls", "image_url", "images", "image", "input_images", "reference_images",
+                          "reference_image_urls", "reference_urls", "init_image", "init_images", "source_image")
+OTHER_FIELD_CANDIDATES = ("aspect_ratio", "resolution", "num_images", "quality", "size", "seed", "strength", "style", "enhance_prompt")
+
+
+def probe_fields(client, model: str) -> str:
+    """Send a request that can never validate (prompt as a number) with candidate image/option
+    fields also as numbers; the validator's answer names which fields the model knows.
+    Nothing is generated or charged."""
+    from higgsfield_client.exceptions import HiggsfieldClientError
+
+    body = {"prompt": 123}
+    body.update({k: 123 for k in IMAGE_FIELD_CANDIDATES})
+    body.update({k: 123 for k in OTHER_FIELD_CANDIDATES})
+    try:
+        client._transport.request("POST", model, json=body)
+    except HiggsfieldClientError as e:
+        return f"HTTP {_status_code(e)}: {e}"
+    except Exception as e:  # noqa: BLE001
+        return f"error: {e}"
+    return "accepted?! (unexpected: the probe should never validate)"
