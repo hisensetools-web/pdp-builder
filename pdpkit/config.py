@@ -83,8 +83,13 @@ SHOPIFY_REQUIRED_SCOPES = ("write_products", "write_files")
 PROMPTS_FILE = Path(os.environ.get("PDP_PROMPTS_FILE", ROOT / "prompts.txt"))
 PROMPTS_EXAMPLE = ROOT / "prompts.example.txt"
 
+# --- Brand ------------------------------------------------------------------
+BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles
+BRAND_SUFFIX = os.environ.get("BRAND_SUFFIX", "").strip()               # optional, e.g. "by SoleneLife" instead of a prefix
+GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "").strip() in ("1", "true", "yes")   # default: gallery (top-of-fold) only
+
 # --- Guide ------------------------------------------------------------------
-PDP_TEMPLATE = os.environ.get("PDP_TEMPLATE", "").strip()   # default reference PDP template path
+PDP_TEMPLATE = os.environ.get("PDP_TEMPLATE", str(ROOT / "templates" / "universal_pdp_template.md")).strip()
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -101,3 +106,35 @@ def product_dir(slug: str) -> Path:
 def generated_dir_name(product_name: str) -> str:
     """The user-specified folder name for Higgsfield output: '[product name]_shopify_PDP_imgs'."""
     return f"{slugify(product_name)}_shopify_PDP_imgs"
+
+
+_TRADEMARKS = re.compile(r"[\u2122\u00ae\u00a9]")   # ™ ® ©
+
+
+def generic_name(title: str, vendor: str = "", store_domain: str = "") -> str:
+    """Competitor title without their brand: 'Ruffs™ Calming Diffuser Kit' -> 'Calming Diffuser Kit'."""
+    name = _TRADEMARKS.sub("", title or "")
+    host = (store_domain or "").lower().replace("www.", "").split(".")[0]
+    stems = {host}
+    for pre in ("get", "try", "shop", "the", "my", "buy", "hello", "meet", "go", "use"):
+        if host.startswith(pre) and len(host) > len(pre) + 2:
+            stems.add(host[len(pre):])
+    for suf in ("store", "shop", "official", "co", "us", "uk", "au"):
+        stems |= {st[: -len(suf)] for st in list(stems) if st.endswith(suf) and len(st) > len(suf) + 2}
+    brands = {b for b in ({vendor or ""} | stems) if len(b) >= 3}
+    for b in sorted(brands, key=len, reverse=True):
+        name = re.sub(r"(?i)\b" + re.escape(b) + r"['\u2019]?s?\b", "", name)
+    name = re.sub(r"\s*[|\-\u2013\u2014:]\s*$", "", name)
+    name = re.sub(r"^\s*[|\-\u2013\u2014:]\s*", "", name)
+    return re.sub(r"\s{2,}", " ", name).strip(" -\u2013\u2014|:") or title
+
+
+def our_title(title: str, vendor: str = "", store_domain: str = "", brand: str | None = None) -> str:
+    """'Ruffs™ Calming Diffuser Kit' -> 'SoleneLife Calming Diffuser Kit'."""
+    brand = BRAND_NAME if brand is None else brand
+    base = generic_name(title, vendor, store_domain)
+    if not brand:
+        return base
+    if base.lower().startswith(brand.lower()):
+        return base
+    return f"{base} {BRAND_SUFFIX}".strip() if BRAND_SUFFIX else f"{brand} {base}"

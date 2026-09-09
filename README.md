@@ -4,11 +4,11 @@ Give it a competitor product page and it produces everything needed to launch ou
 
 | what | where | command |
 |---|---|---|
-| every image on the competitor page (gallery first, then page images, size suffixes stripped so you get the originals) | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
+| the competitor's gallery images (top of fold; `--all-images` for the rest of the page), size suffixes stripped so you get the originals | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
 | summary of the competitor page (title, price/compare-at, variants, copy, headings in order, bullets, FAQ, trust lines, reviews) | `product_summary.md` + `product_summary.json` | `grab` |
 | new images rendered by Higgsfield from your prompt, with the competitor images as references | `<product name>_shopify_PDP_imgs/` + `generation_log.json` | `generate` |
 | those images uploaded to a **draft** Shopify product | `shopify_upload.json` | `upload` (`shopify-check` first) |
-| PDF build instructions for Fudge, merged from our reference PDP template + the summary | `<slug>_fudge_guide.pdf` (+ `.md`) | `guide` |
+| PDF build guide for Fudge: the Universal PDP Template's Product Brief (B1-B16) filled, then every block card with copy, image assignment and build prompt for this product | `<slug>_fudge_guide.pdf` (+ `.md`) | `guide` |
 
 
 ## Setup (Windows, PowerShell)
@@ -32,8 +32,8 @@ python pdp.py grab https://competitor.com/products/glow-neck-massager
 python pdp.py generate glow-neck-massager                     # prompts from prompts.txt (one per paragraph, {title} etc. filled in)
 python pdp.py generate glow-neck-massager --prompt "Studio shot on white, soft shadow, same product"   # or inline
 python pdp.py upload glow-neck-massager                       # creates a DRAFT product with the competitor title
-python pdp.py guide glow-neck-massager --template templates/pdp_template.md
-python pdp.py run https://competitor.com/products/x --template templates/pdp_template.md   # all four, prompts from prompts.txt
+python pdp.py guide glow-neck-massager                        # template: templates/universal_pdp_template.md
+python pdp.py run https://competitor.com/products/x           # all four, prompts from prompts.txt
 python pdp.py list                                            # what has been grabbed / generated / uploaded
 ```
 
@@ -81,3 +81,18 @@ not tracked by git): one prompt per paragraph, `#` lines ignored, `{title}` `{ha
 `{product_type}` filled from the grabbed product. `--prompt` / `--prompt-file` override it for one run.
 Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `upload --handle x` / `--product-id N` (attach to an existing product), `upload --with-description`,
 `--dry-run` on `generate` and `upload`. A starter template is in `templates/pdp_template.example.md`.
+
+## Branding
+
+Everything we create is ours, not the competitor's: `BRAND_NAME` (default SoleneLife) replaces their brand in the
+product title, so "Ruffs™ Calming Diffuser Kit" becomes "SoleneLife Calming Diffuser Kit" for the Shopify draft
+product, the generated-images folder and the `{title}` placeholder in prompts (`{product}` is the unbranded name,
+`{competitor_title}` the original). `--name` overrides the title for one run.
+
+## Template
+
+`templates/universal_pdp_template.md` is the text of our Universal PDP Template Guide (the PDF, converted). `guide`
+hands it to Claude together with the product summary and produces the per-product companion Fudge needs: the filled
+Product Brief, then for every block BUILD or DROP, the final copy, which generated image goes where, and the block's
+build prompt with our values. Keep the PDF itself next to it for the reference screenshots (PDFs in `templates/` are
+not committed).

@@ -26,13 +26,19 @@ def _product_dir(slug_or_path: str) -> Path:
     return d
 
 
+def _facts(product_dir: Path) -> dict:
+    fp = product_dir / "product_summary.json"
+    return json.loads(fp.read_text(encoding="utf-8")) if fp.exists() else {}
+
+
 def _product_name(product_dir: Path, override: str | None = None) -> str:
+    """Our branded title (BRAND_NAME + competitor title without their brand), unless overridden."""
     if override:
         return override
-    facts = product_dir / "product_summary.json"
-    if facts.exists():
-        data = json.loads(facts.read_text(encoding="utf-8"))
-        return data.get("title") or data.get("handle") or product_dir.name
+    facts = _facts(product_dir)
+    if facts.get("title"):
+        from urllib.parse import urlparse
+        return config.our_title(facts["title"], facts.get("vendor", ""), urlparse(facts.get("url", "")).netloc)
     return product_dir.name
 
 
@@ -47,11 +53,14 @@ def parse_prompts(text: str) -> list[str]:
 
 
 def fill_placeholders(prompts: list[str], product_dir: Path | None) -> list[str]:
-    facts = {}
-    if product_dir and (product_dir / "product_summary.json").exists():
-        facts = json.loads((product_dir / "product_summary.json").read_text(encoding="utf-8"))
-    values = {k: str(facts.get(k) or "") for k in ("title", "handle", "vendor", "price", "product_type", "currency")}
-    values["product"] = values["title"]
+    facts = _facts(product_dir) if product_dir else {}
+    from urllib.parse import urlparse
+    domain = urlparse(facts.get("url", "")).netloc
+    values = {k: str(facts.get(k) or "") for k in ("handle", "vendor", "price", "product_type", "currency")}
+    values["competitor_title"] = str(facts.get("title") or "")
+    values["product"] = config.generic_name(values["competitor_title"], values["vendor"], domain) if values["competitor_title"] else ""
+    values["title"] = config.our_title(values["competitor_title"], values["vendor"], domain) if values["competitor_title"] else ""
+    values["brand"] = config.BRAND_NAME
     out = []
     for p in prompts:
         for k, v in values.items():
@@ -85,12 +94,14 @@ def cmd_grab(args) -> int:
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
     try:
-        data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None)
+        data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None, all_images=True if args.all_images else None)
     except RuntimeError as e:
         raise SystemExit(f"could not fetch {args.url}: {str(e).split('Caused by')[-1].strip(' ()')[:200]}\n"
                          "Check the URL opens in your browser; if the store blocks scripts, retry with --browser.") from e
     md = summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
+    from urllib.parse import urlparse
     print(f"product : {data.title}")
+    print(f"ours    : {config.our_title(data.title, data.vendor, urlparse(data.url).netloc)}")
     print(f"folder  : {out_dir}")
     print(f"images  : {len(manifest)} saved to {out_dir / 'competitor_imgs'} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
     print(f"summary : {md}")
@@ -129,7 +140,7 @@ def cmd_upload(args) -> int:
     result = shopify_admin.upload_folder(
         folder, title=args.title or name, handle=args.handle, product_id=args.product_id,
         description_html=facts.get("description_html", "") if args.with_description else "",
-        vendor=facts.get("vendor", "") if args.with_description else "", product_type=facts.get("product_type", ""),
+        vendor=config.BRAND_NAME, product_type=facts.get("product_type", ""),
         dry_run=args.dry_run,
     )
     if not args.dry_run:
@@ -153,7 +164,7 @@ def cmd_guide(args) -> int:
 def cmd_run(args) -> int:
     """grab -> generate -> upload -> guide, stopping at the first missing prerequisite."""
     from . import scrape, summary
-    data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None)
+    data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None, all_images=True if args.all_images else None)
     summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
     print(f"[1/4] grabbed {len(manifest)} images -> {out_dir}")
     name = args.name or data.title or data.handle
@@ -300,6 +311,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("grab", help="download every image on a competitor PDP + write product_summary")
     s.add_argument("url")
     s.add_argument("--browser", action="store_true", help="force a headless Chromium render (JS-heavy pages)")
+    s.add_argument("--all-images", action="store_true", help="also save the page's other images, not just the gallery")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude rewrite of the summary")
     s.set_defaults(func=cmd_grab)
 
@@ -326,6 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("url")
     s.add_argument("--name")
     s.add_argument("--browser", action="store_true")
+    s.add_argument("--all-images", action="store_true")
     s.add_argument("--no-claude", action="store_true")
     add_generate_opts(s)
     add_upload_opts(s)

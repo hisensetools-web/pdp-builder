@@ -15,27 +15,48 @@ from . import config
 
 log = logging.getLogger("pdpkit.guide")
 
-GUIDE_SYSTEM = """You write build instructions for "Fudge", an AI agent that builds Shopify product pages.
-You receive (1) our reference PDP template, which defines the sections, order, tone and rules every one of our
-product pages follows, and (2) a product_summary scraped from a competitor's page for the product we are launching.
+GUIDE_SYSTEM = """You prepare the per-product build guide that "Fudge", our AI Shopify page builder, follows to build a product
+page from our Universal PDP Template (a 22-block, block-by-block framework). You receive:
+  (1) the full template text: global design system, copy rules, the Product Brief field list (B1-B16), 22 block cards
+      (each with layout, styling, behavior, a copy formula, a worked example for a fictional demo product, Shopify data
+      sources, a paste-ready build prompt, and a DO NOT list) and appendices (category matrix, replace-registry, QA);
+  (2) product_summary: facts scraped from a competitor's page for the product we are launching under OUR brand;
+  (3) our brand name, our product title, and the list of generated image files available for the page.
 
-Produce a complete, self-contained instruction guide that Fudge can follow without seeing either source.
-Structure it exactly as:
-# PDP build guide: <product name>
-## 0. Product snapshot (name, price, compare-at, variants, one-line pitch)
-## 1. Page settings (title, URL handle, SEO title + meta description, tags, product type)
-## 2. Sections in order
-For every section of the template: heading, purpose, the exact copy to use (headline, subhead, body, bullets, CTA text),
-which image to place (refer to files as gen_01.jpg, gen_02.jpg ... from the generated set; say what the image should show),
-and layout notes. Write the actual copy, not placeholders. Adapt the competitor's angle into our voice; never copy
-their sentences verbatim.
-## 3. FAQ (questions + answers)
-## 4. Reviews to seed (5-8 short, varied, realistic review texts with names and star ratings)
-## 5. Compliance / claims check (claims that need softening, anything to avoid)
-## 6. Checklist before publish
+Produce the guide in Markdown, exactly this structure:
 
-Rules: follow the template's section order and rules exactly where they exist; use the summary for facts and angle;
-mark anything you had to invent with [ASSUMED]. Markdown only, no preamble."""
+# PDP build guide: <our product title>
+One paragraph: what the product is, the angle we take, and which template category (Appendix A) applies.
+
+## 1. Product Brief
+A table with every field B1..B16 filled for OUR product. Use our brand (never the competitor's), the three-tier one-time
+offer exactly as the template defines it (Buy 1 / Buy 2 get 1 free / Buy 3 get 2 free, tier 2 pre-selected) with prices
+derived from the unit price in product_summary, and the competitor's pains, mechanism, components, quality signals, FAQ
+and review themes rewritten in our voice. If a field has no real data (clinician counts, studies, partner/mission,
+cross-sell products), write "none - block dropped" rather than inventing it.
+
+## 2. Blocks
+One subsection per block, "### BLOCK NN - <name>", in template order 00..21, each containing:
+- **Status:** BUILD or DROP, with the one-line reason (the template rule: a block whose Brief field is empty is dropped).
+- **Copy:** every copy slot of the block filled with final text, following that block's copy formula and the global copy
+  rules (second person, sentence-case headlines, specific numbers only when real, asterisk on unverifiable claims,
+  reusable micro-copy verbatim). Reviews: reuse the competitor's review THEMES but write new, realistic review text
+  attributed to first name + initial; never copy their reviews verbatim.
+- **Images:** which files to place, chosen from the generated image list (gen_01.jpg ...) by what each slot needs; say
+  what each image must show. If more images are needed than exist, say which additional Higgsfield prompt to run.
+- **Build prompt:** the block's paste-ready build prompt (section 7 of the card) rewritten with our product's values
+  substituted for the demo product's, kept to the same length and specificity.
+- **Do not:** the block's DO NOT list, carried over verbatim.
+
+## 3. Replace-registry
+A table of every value in this guide that is an assumption or placeholder (prefix each in the text with [ASSUMED]),
+with what to replace it with before publish.
+
+## 4. QA checklist
+The template's Appendix D checklist condensed to the items relevant to the blocks marked BUILD.
+
+Rules: never mention the competitor by name anywhere in the guide; use only facts from product_summary plus the
+template; mark anything invented [ASSUMED]; Markdown only, no preamble, no closing remarks."""
 
 
 # --------------------------------------------------------------------------- template reading
@@ -67,7 +88,7 @@ def read_template(path: Path) -> str:
 
 
 # --------------------------------------------------------------------------- content
-def claude_guide(template_text: str, summary_md: str, generated_files: list[str]) -> str | None:
+def claude_guide(template_text: str, summary_md: str, generated_files: list[str], *, brand: str = "", our_title: str = "") -> str | None:
     if not config.ANTHROPIC_ENABLED:
         return None
     try:
@@ -77,15 +98,19 @@ def claude_guide(template_text: str, summary_md: str, generated_files: list[str]
     client = anthropic.Anthropic()
     user = (
         "## Reference PDP template\n\n" + template_text.strip() +
-        "\n\n## product_summary\n\n" + summary_md.strip() +
+        f"\n\n## Our brand\n\nBrand name: {brand or config.BRAND_NAME}\nOur product title (Shopify title): {our_title}\n" +
+        "\n\n## product_summary (scraped from the competitor page)\n\n" + summary_md.strip() +
         "\n\n## Generated image files available\n\n" + ("\n".join(generated_files) if generated_files else "(none yet)")
     )
     try:
         with client.messages.stream(
             model=config.ANTHROPIC_MODEL,
-            max_tokens=32000,
-            system=GUIDE_SYSTEM,
-            messages=[{"role": "user", "content": user}],
+            max_tokens=64000,
+            system=[{"type": "text", "text": GUIDE_SYSTEM}],
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": user.split("\n\n## Our brand")[0], "cache_control": {"type": "ephemeral"}},   # template: stable across products
+                {"type": "text", "text": "\n\n## Our brand" + user.split("\n\n## Our brand", 1)[1]},
+            ]}],
         ) as stream:
             msg = stream.get_final_message()
     except anthropic.APIError as e:
@@ -207,7 +232,7 @@ def build_guide(product_dir: Path, product_name: str, template_path: Path, *, us
     template_text = read_template(template_path)
     gen_dir = product_dir / config.generated_dir_name(product_name)
     generated = sorted(p.name for p in gen_dir.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")) if gen_dir.exists() else []
-    md = (claude_guide(template_text, summary_md, generated) if use_claude else None) or mechanical_guide(product_name, template_text, summary_md, generated)
+    md = (claude_guide(template_text, summary_md, generated, our_title=product_name) if use_claude else None) or mechanical_guide(product_name, template_text, summary_md, generated)
     slug = config.slugify(product_name)
     (product_dir / f"{slug}_fudge_guide.md").write_text(md, encoding="utf-8")
     return markdown_to_pdf(md, product_dir / f"{slug}_fudge_guide.pdf", f"PDP build guide: {product_name}")

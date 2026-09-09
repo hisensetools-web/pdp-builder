@@ -475,9 +475,20 @@ def extract_page_data(html: str, url: str, product_json: dict | None = None) -> 
     return pd
 
 
+def select_for_download(refs: list[ImageRef], all_images: bool) -> list[ImageRef]:
+    """Gallery only by default; everything when asked, or when the page exposes no gallery at all."""
+    if all_images or not any(r.kind == "gallery" for r in refs):
+        return refs
+    return [r for r in refs if r.kind == "gallery"]
+
+
 # --------------------------------------------------------------------------- orchestration
-def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None, session: requests.Session | None = None) -> tuple[PageData, Path, list[dict]]:
-    """Full competitor grab: page facts + every image saved to <out_dir>/competitor_imgs/."""
+def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None, session: requests.Session | None = None,
+         all_images: bool | None = None) -> tuple[PageData, Path, list[dict]]:
+    """Competitor grab: page facts + images saved to <out_dir>/competitor_imgs/.
+    By default only the gallery (top-of-fold product photos) is saved; all_images=True also saves
+    the rest of the page's images (infographics, lifestyle blocks)."""
+    all_images = config.GRAB_ALL_IMAGES if all_images is None else all_images
     session = session or make_session()
     html = fetch_html(session, url)
     product_json = fetch_shopify_product(session, url)
@@ -498,6 +509,6 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     if product_json:
         (out_dir / "product.json").write_text(json.dumps(product_json, indent=2), encoding="utf-8")
-    manifest = download_images(session, refs, out_dir / "competitor_imgs")
+    manifest = download_images(session, select_for_download(refs, all_images), out_dir / "competitor_imgs")
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest

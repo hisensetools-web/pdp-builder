@@ -5,3 +5,4 @@ pdp_output/
 data/shopify_token.json
 .pytest_cache/
 prompts.txt
+templates/*.pdf

@@ -96,6 +96,23 @@ class ExtractTests(unittest.TestCase):
             self.assertEqual(facts["title"], "Glow Neck Massager")
 
 
+class BrandingTests(unittest.TestCase):
+    def test_generic_and_our_title(self):
+        with mock.patch.object(config, "BRAND_NAME", "SoleneLife"), mock.patch.object(config, "BRAND_SUFFIX", ""):
+            self.assertEqual(config.generic_name("Ruffs\u2122 Calming Diffuser Kit", "Ruffs", "getruffs.com"), "Calming Diffuser Kit")
+            self.assertEqual(config.our_title("Ruffs\u2122 Calming Diffuser Kit", "Ruffs", "getruffs.com"), "SoleneLife Calming Diffuser Kit")
+            self.assertEqual(config.our_title("Nuzzle Pillow - Nuzzle", "", "trynuzzle.com"), "SoleneLife Pillow")
+            self.assertEqual(config.our_title("SoleneLife Thing", "", ""), "SoleneLife Thing")
+        with mock.patch.object(config, "BRAND_NAME", "SoleneLife"), mock.patch.object(config, "BRAND_SUFFIX", "by SoleneLife"):
+            self.assertEqual(config.our_title("Ruffs Diffuser", "Ruffs", ""), "Diffuser by SoleneLife")
+
+    def test_gallery_only_selection(self):
+        refs = [scrape.ImageRef("a", kind="gallery"), scrape.ImageRef("b", kind="page")]
+        self.assertEqual([r.url for r in scrape.select_for_download(refs, False)], ["a"])
+        self.assertEqual([r.url for r in scrape.select_for_download(refs, True)], ["a", "b"])
+        self.assertEqual(len(scrape.select_for_download([scrape.ImageRef("b", kind="page")], False)), 1)
+
+
 class PromptFileTests(unittest.TestCase):
     def test_parse_and_placeholders(self):
         from pdpkit import cli
@@ -103,8 +120,9 @@ class PromptFileTests(unittest.TestCase):
         prompts = cli.parse_prompts(text)
         self.assertEqual(prompts, ["Studio shot of the {title} soft shadow", "Lifestyle {product} at {price}"])
         with tempfile.TemporaryDirectory() as d:
-            (Path(d) / "product_summary.json").write_text(json.dumps({"title": "Glow", "price": "49.00"}))
-            self.assertEqual(cli.fill_placeholders(prompts, Path(d)), ["Studio shot of the Glow soft shadow", "Lifestyle Glow at 49.00"])
+            (Path(d) / "product_summary.json").write_text(json.dumps({"title": "Ruffs Glow", "vendor": "Ruffs", "price": "49.00", "url": "https://getruffs.com/products/g"}))
+            with mock.patch.object(config, "BRAND_NAME", "SoleneLife"), mock.patch.object(config, "BRAND_SUFFIX", ""):
+                self.assertEqual(cli.fill_placeholders(prompts, Path(d)), ["Studio shot of the SoleneLife Glow soft shadow", "Lifestyle Glow at 49.00"])
         self.assertEqual(cli.fill_placeholders(["{title}"], None), [""])
 
     def test_default_prompts_file_is_created_from_example(self):
