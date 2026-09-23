@@ -89,6 +89,20 @@ def _prompts(args, product_dir: Path | None = None) -> list[str]:
     return fill_placeholders(prompts, product_dir)
 
 
+def _apply_image_opts(args) -> None:
+    """Per-run overrides of the compression settings in .env."""
+    if getattr(args, "no_compress", False) or getattr(args, "originals_only", False):
+        config.COMPRESS_IMAGES = False
+    if getattr(args, "keep_originals", False):
+        config.KEEP_ORIGINALS = True
+    if getattr(args, "max_px", None) is not None:
+        config.IMAGE_MAX_PX = args.max_px
+    if getattr(args, "quality", None) is not None:
+        config.IMAGE_QUALITY = args.quality
+    if getattr(args, "format", None):
+        config.IMAGE_FORMAT = args.format
+
+
 def _size_line(manifest: list[dict]) -> str:
     """'4.1 MB -> 1.2 MB (71% smaller)' for one product's images."""
     out = sum(m.get("bytes", 0) for m in manifest)
@@ -106,6 +120,7 @@ def _size_line(manifest: list[dict]) -> str:
 # --------------------------------------------------------------------------- commands
 def cmd_grab(args) -> int:
     from . import scrape, summary
+    _apply_image_opts(args)
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
     try:
@@ -215,6 +230,7 @@ def cmd_batch(args) -> int:
     if not path.is_file():
         raise SystemExit(f"{path} not found. In Google Sheets: File > Download > Comma-separated values (.csv), "
                          "save it in this folder, then pass its name.")
+    _apply_image_opts(args)
     rows, note = batch.read_rows(path)
     print(f"{path.name}: {len(rows)} products ({note})")
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=args.all_images,
@@ -325,6 +341,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="command", required=True)
 
+    def add_image_opts(sp):
+        g = sp.add_argument_group("images")
+        g.add_argument("--no-compress", action="store_true",
+                       help="save images exactly as the store served them (no resize, no re-encode)")
+        g.add_argument("--keep-originals", action="store_true",
+                       help="save the untouched files too, in competitor_imgs/originals/")
+        g.add_argument("--max-px", type=int, metavar="N",
+                       help=f"longest side after resize (default {config.IMAGE_MAX_PX}; 0 = never resize)")
+        g.add_argument("--quality", type=int, metavar="N", help=f"JPEG/WebP quality (default {config.IMAGE_QUALITY})")
+        g.add_argument("--format", choices=("jpeg", "webp", "png"), help=f"output format (default {config.IMAGE_FORMAT})")
+
     def add_product(sp):
         sp.add_argument("product", help="product slug (folder under pdp_output/) or a folder path")
         sp.add_argument("--name", help="override the product name used for folder / Shopify title")
@@ -349,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--browser", action="store_true", help="force a headless Chromium render (JS-heavy pages)")
     s.add_argument("--all-images", action="store_true", help="also save the page's other images, not just the gallery")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude rewrite of the summary")
+    add_image_opts(s)
     s.set_defaults(func=cmd_grab)
 
     s = sub.add_parser("generate", help="Higgsfield images using competitor_imgs as references")
@@ -407,6 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--limit", type=int, help="only the first N products")
     s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
+    add_image_opts(s)
     s.set_defaults(func=cmd_batch)
 
     s = sub.add_parser("list", help="what has been grabbed / generated / uploaded")

@@ -329,6 +329,10 @@ def download_images(session: requests.Session, refs: list[ImageRef], dest: Path,
         counters[ref.kind] += 1
         name = f"{ref.kind}_{counters[ref.kind]:02d}{shot.ext}"
         (dest / name).write_bytes(shot.data)
+        if config.KEEP_ORIGINALS and shot.note != "original":
+            originals = dest / "originals"
+            originals.mkdir(exist_ok=True)
+            (originals / f"{ref.kind}_{counters[ref.kind]:02d}{ext}").write_bytes(r.content)
         entry = {"file": name, "url": ref.url, "alt": ref.alt, "kind": ref.kind,
                  "bytes": len(shot.data), "source_bytes": shot.original_bytes, "sha1": digest}
         if shot.width:

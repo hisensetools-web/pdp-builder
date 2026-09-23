@@ -120,8 +120,17 @@ flattened onto white rather than black. An image that needs no resizing and woul
 own file is kept exactly as downloaded, so compression never makes a file worse. `manifest.json` records both sizes
 and the final pixel dimensions per image.
 
-Tune in `.env`: `PDP_IMAGE_MAX_PX` (0 disables resizing), `PDP_IMAGE_QUALITY`, `PDP_IMAGE_FORMAT` (`jpeg`, `webp`,
-`png`), or `PDP_COMPRESS=0` to store originals untouched. Needs Pillow, which `requirements.txt` installs; without it
+Per run, on `grab` and `batch`:
+
+```bash
+python pdp.py batch --no-compress        # save the store's files exactly as served
+python pdp.py batch --keep-originals     # compressed images plus the untouched ones in competitor_imgs/originals/
+python pdp.py batch --max-px 3000 --quality 90    # bigger and sharper
+python pdp.py batch --format webp        # or png
+```
+
+The same settings as defaults in `.env`: `PDP_COMPRESS`, `PDP_IMAGE_MAX_PX` (0 disables resizing),
+`PDP_IMAGE_QUALITY`, `PDP_IMAGE_FORMAT`, `PDP_KEEP_ORIGINALS`. Needs Pillow, which `requirements.txt` installs; without it
 images are saved as downloaded and the run says so once.
 
 ## Branding

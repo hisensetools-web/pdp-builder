@@ -116,6 +116,41 @@ class DownloadCompressionTests(unittest.TestCase):
             self.assertLess(manifest[0]["bytes"], manifest[0]["source_bytes"])
             self.assertEqual(Image.open(written).size, (2048, 1365))
 
+    def test_keep_originals_writes_the_untouched_file_alongside(self):
+        big = png_bytes(3000, 2000)
+
+        class Resp:
+            status_code = 200
+            content = big
+            headers = {"content-type": "image/png"}
+
+        refs = [scrape.ImageRef("https://s.com/a.png", alt="a", kind="gallery")]
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch("pdpkit.scrape._get", return_value=Resp()), \
+             mock.patch("pdpkit.scrape.time.sleep"), \
+             mock.patch.multiple(config, COMPRESS_IMAGES=True, KEEP_ORIGINALS=True, IMAGE_MAX_PX=2048,
+                                 IMAGE_QUALITY=82, IMAGE_FORMAT="jpeg", MIN_IMAGE_BYTES=10):
+            scrape.download_images(mock.Mock(), refs, Path(d))
+            original = Path(d) / "originals" / "gallery_01.png"
+            self.assertTrue(original.is_file())
+            self.assertEqual(original.read_bytes(), big)
+            self.assertLess((Path(d) / "gallery_01.jpg").stat().st_size, original.stat().st_size)
+
+    def test_cli_flags_override_the_env_settings(self):
+        from pdpkit import cli
+        import argparse
+        before = (config.COMPRESS_IMAGES, config.IMAGE_MAX_PX, config.IMAGE_QUALITY, config.IMAGE_FORMAT, config.KEEP_ORIGINALS)
+        try:
+            cli._apply_image_opts(argparse.Namespace(no_compress=False, keep_originals=True, max_px=1200,
+                                                     quality=70, format="webp"))
+            self.assertEqual((config.IMAGE_MAX_PX, config.IMAGE_QUALITY, config.IMAGE_FORMAT), (1200, 70, "webp"))
+            self.assertTrue(config.KEEP_ORIGINALS)
+            cli._apply_image_opts(argparse.Namespace(no_compress=True))
+            self.assertFalse(config.COMPRESS_IMAGES)
+        finally:
+            (config.COMPRESS_IMAGES, config.IMAGE_MAX_PX, config.IMAGE_QUALITY,
+             config.IMAGE_FORMAT, config.KEEP_ORIGINALS) = before
+
     def test_size_line(self):
         from pdpkit.cli import _size_line
         self.assertIn("smaller", _size_line([{"bytes": 1_000_000, "source_bytes": 4_000_000}]))
