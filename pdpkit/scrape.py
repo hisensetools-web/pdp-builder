@@ -169,7 +169,23 @@ def render_html(url: str, wait_ms: int = 4000) -> str:
             page.evaluate(f"window.scrollTo(0, {y})")
             page.wait_for_timeout(350)
             height = page.evaluate("document.body.scrollHeight")
-        page.wait_for_timeout(1500)
+        # carousels only render the visible slide: force every lazy image to load and scroll
+        # each horizontally scrollable strip to its end
+        page.evaluate("""() => {
+            document.querySelectorAll('img').forEach(i => {
+                i.loading = 'eager';
+                for (const a of ['data-src','data-original','data-lazy','data-large_image','data-full']) {
+                    const v = i.getAttribute(a);
+                    if (v && !i.src.includes(v)) i.setAttribute('src', v);
+                }
+            });
+            document.querySelectorAll('*').forEach(el => {
+                if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = el.scrollWidth;
+            });
+        }""")
+        page.wait_for_timeout(2500)
+        page.evaluate("() => document.querySelectorAll('*').forEach(el => { if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = 0; })")
+        page.wait_for_timeout(1200)
         html = page.content()
         browser.close()
     return html
@@ -238,6 +254,58 @@ def find_product_handle(html: str) -> str | None:
     if not counts:
         return None
     return max(counts, key=lambda h: (counts[h], -len(h)))
+
+
+_PRODUCT_ID_RE = re.compile(r'"product"\s*:\s*\{[^{}]*?"id"\s*:\s*"?(\d{6,})', re.I)
+_VARIANT_ID_RE = re.compile(r'name=["\']id["\'][^>]*value=["\'](\d{6,})|"variants?"\s*:\s*\[?\s*\{[^{}]*?"id"\s*:\s*"?(\d{6,})', re.I)
+
+
+def page_product_ids(html: str) -> tuple[set[str], set[str]]:
+    """Shopify product ids and variant ids mentioned anywhere on the page.
+    A landing page with a direct add-to-cart form carries the variant id even when it never
+    links to /products/<handle>."""
+    products = set(_PRODUCT_ID_RE.findall(html))
+    variants = {g for m in _VARIANT_ID_RE.findall(html) for g in m if g}
+    return products, variants
+
+
+def _title_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(w) > 2}
+
+
+def find_product_in_catalogue(session: requests.Session, base_url: str, html: str, page_title: str = "",
+                              max_pages: int = 3) -> dict | None:
+    """Last resort for a landing page: read the store's own catalogue and pick the product this
+    page sells, matched on product id, then variant id, then title overlap."""
+    origin = "{0.scheme}://{0.netloc}".format(urlparse(base_url))
+    product_ids, variant_ids = page_product_ids(html)
+    want = _title_words(page_title)
+    best, best_score = None, 0.0
+    for page in range(1, max_pages + 1):
+        try:
+            r = _get(session, f"{origin}/products.json", params={"limit": 250, "page": page},
+                     headers={"Accept": "application/json"})
+        except RuntimeError:
+            return best
+        if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+            return best
+        try:
+            items = (r.json() or {}).get("products") or []
+        except ValueError:
+            return best
+        if not items:
+            break
+        for prod in items:
+            if str(prod.get("id")) in product_ids:
+                return prod
+            if variant_ids and {str(v.get("id")) for v in prod.get("variants") or []} & variant_ids:
+                return prod
+            if want:
+                have = _title_words(prod.get("title", ""))
+                overlap = len(want & have) / len(want)
+                if overlap > best_score and overlap >= 0.6:
+                    best, best_score = prod, overlap
+    return best
 
 
 def fetch_product_by_handle(session: requests.Session, base_url: str, handle: str) -> dict | None:
@@ -615,6 +683,12 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
             product_json = fetch_product_by_handle(session, url, discovered)
             if product_json:
                 log.info("landing page: using the gallery of /products/%s", discovered)
+        if product_json is None:
+            title = (BeautifulSoup(html, "html.parser").title.get_text() if "<title" in html else "") or ""
+            product_json = find_product_in_catalogue(session, url, html, title)
+            if product_json:
+                discovered = product_json.get("handle")
+                log.info("landing page: matched the store catalogue to /products/%s", discovered)
     refs = extract_image_refs(html, url, product_json)
     js_heavy = use_browser is True or (use_browser is None and len(refs) < 3 and not product_json)
     if js_heavy:

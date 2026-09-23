@@ -323,6 +323,73 @@ def cmd_shopify_check(args) -> int:
     return 0
 
 
+def cmd_inspect(args) -> int:
+    """Explain what the extractor sees in a page already saved by `grab`, so a store that
+    yielded the wrong images can be diagnosed without fetching it again."""
+    import json as _json
+    import re as _re
+    from bs4 import BeautifulSoup
+    from . import scrape
+
+    pdir = _product_dir(args.product)
+    html_path = pdir / "page_source.html"
+    if not html_path.is_file():
+        raise SystemExit(f"{html_path} not found; run `grab` for this product first")
+    html = html_path.read_text(encoding="utf-8", errors="replace")
+    facts = _facts(pdir)
+    url = facts.get("url", "")
+    print(f"page    : {html_path}  ({len(html) / 1024:.0f} KB)")
+    print(f"url     : {url}")
+    print(f"platform: {facts.get('platform', '?')}   product.json present: {(pdir / 'product.json').exists()}")
+
+    handles = _re.findall(r"/products/([a-z0-9][a-z0-9\-_%]{1,120})(?=[\"'?#/\s\\]|$)", html, _re.I)
+    counts: dict[str, int] = {}
+    for h in handles:
+        counts[h] = counts.get(h, 0) + 1
+    print("\nproduct links on the page:")
+    if counts:
+        for h, n in sorted(counts.items(), key=lambda kv: -kv[1])[:10]:
+            print(f"   {n:4d}x  /products/{h}")
+        print(f"   -> would use: /products/{scrape.find_product_handle(html)}")
+    else:
+        print("   none: this page never links to a /products/ URL")
+
+    pids, vids = scrape.page_product_ids(html)
+    print(f"\nids on the page: product {sorted(pids)[:5] or 'none'}   variant {sorted(vids)[:5] or 'none'}")
+    if not counts and not pids and not vids:
+        print("   (nothing to match against the store catalogue either)")
+
+    refs = scrape.extract_image_refs(html, url or "https://example.com")
+    gallery = [r for r in refs if r.kind == "gallery"]
+    print(f"\nimages found: {len(refs)} total, {len(gallery)} gallery")
+    soup = BeautifulSoup(html, "html.parser")
+    shown = 0
+    for tag in soup.find_all("img"):
+        src = next((tag.get(a) for a in ("src", "data-src", "srcset", "data-srcset") if tag.get(a)), None)
+        if not src or shown >= args.show:
+            continue
+        chain = []
+        node = tag
+        for _ in range(4):
+            node = getattr(node, "parent", None)
+            if node is None or not getattr(node, "get", None):
+                break
+            marker = " ".join(node.get("class") or []) or node.get("id") or ""
+            if marker:
+                chain.append(marker[:40])
+        print(f"   {'GALLERY' if scrape.in_gallery_container(tag) else '  page '}  {src.split()[0][-70:]}")
+        print(f"            in: {' < '.join(chain) or '(no classed ancestors)'}")
+        shown += 1
+
+    cdn = set(_re.findall(r"https?://[^\s\"'<>]+?/cdn/shop/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", html, _re.I))
+    print(f"\nCDN image URLs in the raw source: {len(cdn)}")
+    for u in sorted(cdn)[:args.show]:
+        print(f"   {u[-90:]}")
+    print("\nIf the gallery count is 0 and no /products/ link or id appears above, the page builds its")
+    print("scroller in JavaScript from data this file does not contain. Send me this page_source.html.")
+    return 0
+
+
 def cmd_list(args) -> int:
     root = config.OUTPUT_ROOT
     if not root.exists():
@@ -443,6 +510,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
     add_image_opts(s)
     s.set_defaults(func=cmd_batch)
+
+    s = sub.add_parser("inspect", help="explain what the extractor sees in an already-grabbed page")
+    s.add_argument("product", help="product slug (folder under pdp_output/) or a folder path")
+    s.add_argument("--show", type=int, default=12, help="how many images to list (default 12)")
+    s.set_defaults(func=cmd_inspect)
 
     s = sub.add_parser("list", help="what has been grabbed / generated / uploaded")
     s.set_defaults(func=cmd_list)

@@ -122,12 +122,19 @@ The top-of-fold scroller is found three ways, in order of reliability:
 2. **The product behind a landing page.** A URL like `/the-sol-light` has no product JSON of its own, so the page is
    searched for the product it is built around (canonical URL first, then the most-referenced `/products/<handle>`)
    and that product's gallery is used.
-3. **Gallery containers.** Images inside elements whose class or id reads as a product gallery, carousel, slider,
+3. **The store's catalogue.** A landing page that never links to a product still carries its variant id in the
+   add-to-cart form, so `/products.json` is matched on product id, then variant id, then title.
+4. **Gallery containers.** Images inside elements whose class or id reads as a product gallery, carousel, slider,
    swiper or thumbnail strip count as gallery images. Related-product carousels, testimonial sliders, headers and
    footers are excluded.
 
-If none of the three finds anything, every image on the page is saved instead and the run says so. When the scroller
-is built by JavaScript, `--browser` renders the page first and usually finds it.
+If none of them finds anything, every image on the page is saved instead and the run says so. `--browser` renders the
+page first, forces lazy images to load and scrolls each carousel to its end, which usually reaches a JavaScript-built
+scroller.
+
+When a store still gives the wrong images, `python pdp.py inspect <product>` explains what the extractor saw in the
+page already saved: the product links and ids on the page, which one it would use, every image with the containers
+around it, and the CDN URLs in the raw source.
 
 ## Image compression
 

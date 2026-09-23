@@ -139,5 +139,88 @@ class LandingPageGrabTests(unittest.TestCase):
         self.assertNotIn("https://tykapryde.com/cdn/shop/files/benefit-focus.jpg", gallery)
 
 
+CATALOGUE = {"products": [
+    {"id": 111, "title": "Desk Mat", "handle": "sol-desk-mat", "variants": [{"id": 900}], "images": [{"src": "https://t.com/mat.jpg"}]},
+    {"id": 222, "title": "Sol Study Light", "handle": "sol-study-light", "variants": [{"id": 4455667788}],
+     "images": [{"src": "https://t.com/sol_a.jpg"}, {"src": "https://t.com/sol_b.jpg"}]},
+]}
+
+
+class CatalogueMatchTests(unittest.TestCase):
+    """A landing page with an add-to-cart form but no /products/ link at all."""
+
+    FORM_PAGE = ('<html><head><title>The Sol Light | Tykapryde</title></head><body>'
+                 '<form action="/cart/add"><input type="hidden" name="id" value="4455667788"></form>'
+                 '</body></html>')
+
+    def _session_returning_catalogue(self, calls):
+        class Resp:
+            status_code = 200
+            headers = {"content-type": "application/json"}
+
+            def json(self):
+                return CATALOGUE
+
+        def fake_get(session, url, params=None, **kw):
+            calls.append((url, (params or {}).get("page")))
+            return Resp()
+
+        return fake_get
+
+    def test_ids_are_read_from_an_add_to_cart_form(self):
+        products, variants = scrape.page_product_ids(self.FORM_PAGE)
+        self.assertEqual(products, set())
+        self.assertIn("4455667788", variants)
+
+    def test_variant_id_matches_the_product_in_the_catalogue(self):
+        calls = []
+        with mock.patch("pdpkit.scrape._get", side_effect=self._session_returning_catalogue(calls)):
+            prod = scrape.find_product_in_catalogue(mock.Mock(), "https://t.com/the-sol-light", self.FORM_PAGE, "x")
+        self.assertEqual(prod["handle"], "sol-study-light")
+        self.assertTrue(calls[0][0].endswith("/products.json"))
+
+    def test_title_overlap_matches_when_no_ids_are_present(self):
+        calls = []
+        page = "<html><head><title>The Sol Study Light</title></head><body>nothing</body></html>"
+        with mock.patch("pdpkit.scrape._get", side_effect=self._session_returning_catalogue(calls)):
+            prod = scrape.find_product_in_catalogue(mock.Mock(), "https://t.com/x", page, "The Sol Study Light")
+        self.assertEqual(prod["handle"], "sol-study-light")
+
+    def test_an_unrelated_title_matches_nothing(self):
+        calls = []
+        with mock.patch("pdpkit.scrape._get", side_effect=self._session_returning_catalogue(calls)):
+            prod = scrape.find_product_in_catalogue(mock.Mock(), "https://t.com/x", "<html></html>", "Garden Hose Reel")
+        self.assertIsNone(prod)
+
+    def test_grab_falls_back_to_the_catalogue_when_no_product_link_exists(self):
+        class Resp:
+            def __init__(self, text, body=None, ctype="text/html"):
+                self.status_code, self.text, self._b = 200, text, body
+                self.headers = {"content-type": ctype}
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                if self._b is None:
+                    raise ValueError("no")
+                return self._b
+
+        def fake_get(session, url, params=None, **kw):
+            if url.endswith("/products.json"):
+                return Resp("{}", CATALOGUE, "application/json")
+            if url.endswith(".json"):
+                return Resp("<html>nope</html>")
+            return Resp(self.FORM_PAGE)
+
+        with mock.patch("pdpkit.scrape._get", side_effect=fake_get), \
+             mock.patch("pdpkit.scrape.download_images", return_value=[]) as dl, \
+             mock.patch("pdpkit.scrape.Path.write_text"), mock.patch("pdpkit.scrape.Path.mkdir"):
+            data, _, _ = scrape.grab("https://t.com/the-sol-light", session=mock.Mock())
+        self.assertEqual(data.handle, "sol-study-light")
+        gallery = [r.url for r in dl.call_args[0][1] if r.kind == "gallery"]
+        self.assertEqual(gallery, ["https://t.com/sol_a.jpg", "https://t.com/sol_b.jpg"])
+
+
 if __name__ == "__main__":
     unittest.main()
