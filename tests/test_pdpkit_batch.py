@@ -131,6 +131,14 @@ class ProcessTests(unittest.TestCase):
                 self.assertEqual(batch.find_existing("https://a.com/products/a"), root / "thing")
                 self.assertIsNone(batch.find_existing("https://a.com/products/other"))
 
+    def test_short_error_keeps_the_readable_part(self):
+        self.assertIn("connection refused", batch.short_error(RuntimeError(
+            "GET http://x/y failed after 3 attempts: HTTPConnectionPool(host='127.0.0.1', port=9): Max retries "
+            "exceeded (Caused by NewConnectionError('Failed to establish a new connection: [Errno 111] Connection refused'))")))
+        self.assertEqual(batch.short_error(RuntimeError("blocked: 403 Forbidden")), "HTTP 403 from the store")
+        self.assertEqual(batch.short_error(RuntimeError("read timed out")), "timed out")
+        self.assertIn("does not resolve", batch.short_error(RuntimeError("NameResolutionError: nope")))
+
     def test_log_written(self):
         results = [batch.Result("A", "https://a.com/products/a", status="grabbed", images=3, steps=["grab"])]
         with tempfile.TemporaryDirectory() as d:

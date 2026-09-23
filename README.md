@@ -82,6 +82,17 @@ not tracked by git): one prompt per paragraph, `#` lines ignored, `{title}` `{ha
 Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `upload --handle x` / `--product-id N` (attach to an existing product), `upload --with-description`,
 `--dry-run` on `generate` and `upload`. A starter template is in `templates/pdp_template.example.md`.
 
+## The short version
+
+```powershell
+git pull
+python pdp.py batch          # every product in products.csv -> one folder each, images compressed
+```
+
+One folder per product under `pdp_output/`, named from your sheet, holding the competitor's gallery images
+(compressed and ready for Higgsfield) plus `product_summary.md` with the page's facts. Nothing is re-downloaded on a
+second run. What you do with the folder afterwards is manual: Higgsfield, then Shopify.
+
 ## A whole spreadsheet at once
 
 Export your product sheet (Google Sheets: **File > Download > Comma-separated values**), save it in this folder as
@@ -100,6 +111,18 @@ Instagram, Google) are ignored and the competitor's product link is used, with t
 repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
+
+## Image compression
+
+Every downloaded image is straightened (EXIF orientation), capped at 2048px on its longest side and re-encoded as
+JPEG at quality 82, so a folder that arrives as 27 MB of store originals lands as about 1.3 MB. Transparency is
+flattened onto white rather than black. An image that needs no resizing and would re-encode bigger than the store's
+own file is kept exactly as downloaded, so compression never makes a file worse. `manifest.json` records both sizes
+and the final pixel dimensions per image.
+
+Tune in `.env`: `PDP_IMAGE_MAX_PX` (0 disables resizing), `PDP_IMAGE_QUALITY`, `PDP_IMAGE_FORMAT` (`jpeg`, `webp`,
+`png`), or `PDP_COMPRESS=0` to store originals untouched. Needs Pillow, which `requirements.txt` installs; without it
+images are saved as downloaded and the run says so once.
 
 ## Branding
 

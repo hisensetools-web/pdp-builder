@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from . import config
+from .scrape import short_error  # noqa: F401  (re-exported: batch reports the same short reasons)
 
 log = logging.getLogger("pdpkit.batch")
 
@@ -51,7 +52,14 @@ class Result:
     images: int = 0
     title: str = ""
     error: str = ""
+    bytes: int = 0
+    source_bytes: int = 0
     steps: list = field(default_factory=list)
+
+
+def cli_size(manifest: list[dict]) -> str:
+    from .cli import _size_line
+    return _size_line(manifest)
 
 
 def clean_url(url: str) -> str:
@@ -156,18 +164,22 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             print(f"    already grabbed -> {existing} (use --redo to grab it again)")
             continue
         try:
-            data, out_dir, manifest = scrape.grab(row.url, session=session, all_images=all_images)
+            # the folder is named from the sheet, so it is the name you recognise
+            out_dir = config.product_dir(config.slugify(row.name)) if row.name else None
+            data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session, all_images=all_images)
             summary.write_summary(data, out_dir, manifest)
             res.folder, res.images = str(out_dir), len(manifest)
             res.title = config.our_title(data.title, data.vendor, urlparse(data.url).netloc)
+            res.bytes = sum(m.get("bytes", 0) for m in manifest)
+            res.source_bytes = sum(m.get("source_bytes") or m.get("bytes", 0) for m in manifest)
             res.status = "grabbed"
             res.steps.append("grab")
-            print(f"    {data.title} -> {res.title}")
-            print(f"    {len(manifest)} images -> {out_dir / 'competitor_imgs'}")
+            print(f"    {data.title}")
+            print(f"    {len(manifest)} images -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
         except Exception as e:  # noqa: BLE001 - one bad store must not stop the batch
-            res.status, res.error = "failed", str(e)[:200]
+            res.status, res.error = "failed", short_error(e)
             results.append(res)
-            log.warning("grab failed for %s: %s", row.url, e)
+            log.debug("grab failed for %s: %s", row.url, e)
             print(f"    FAILED: {res.error}")
             continue
         if do_upload:
@@ -206,10 +218,11 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
 def write_log(results: list[Result], path: Path) -> Path:
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["at", "name", "our_title", "url", "status", "images", "folder", "steps", "error"])
+        w.writerow(["at", "name", "our_title", "url", "status", "images", "kb", "source_kb", "folder", "steps", "error"])
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         for r in results:
-            w.writerow([now, r.name, r.title, r.url, r.status, r.images, r.folder, " ".join(r.steps), r.error])
+            w.writerow([now, r.name, r.title, r.url, r.status, r.images, round(r.bytes / 1024),
+                        round(r.source_bytes / 1024), r.folder, " ".join(r.steps), r.error])
     return path
 
 
@@ -219,6 +232,10 @@ def print_summary(results: list[Result]) -> None:
         by_status[r.status] = by_status.get(r.status, 0) + 1
     print("\n" + "-" * 60)
     print("  ".join(f"{k}: {v}" for k, v in sorted(by_status.items())))
+    total, src = sum(r.bytes for r in results), sum(r.source_bytes for r in results)
+    if src:
+        print(f"images: {sum(r.images for r in results)}, {src / 1024 / 1024:.1f} MB downloaded -> "
+              f"{total / 1024 / 1024:.1f} MB on disk ({round(100 * (1 - total / src))}% smaller)")
     failed = [r for r in results if r.status == "failed"]
     if failed:
         print("\nfailed rows (re-run them one at a time with `python pdp.py grab <url>`):")

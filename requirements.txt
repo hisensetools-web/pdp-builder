@@ -1,5 +1,6 @@
 requests>=2.31
 beautifulsoup4>=4.12   # HTML parsing for image discovery + page facts
+pillow>=10.0           # image compression (resize + re-encode every downloaded image)
 reportlab>=4.0         # PDF guide for Fudge
 anthropic>=1.0         # Claude rewrites product_summary and writes the guide (ANTHROPIC_API_KEY)
 higgsfield-client>=0.1 # Higgsfield Cloud image generation (HF_KEY)

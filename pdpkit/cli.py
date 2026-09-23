@@ -89,6 +89,20 @@ def _prompts(args, product_dir: Path | None = None) -> list[str]:
     return fill_placeholders(prompts, product_dir)
 
 
+def _size_line(manifest: list[dict]) -> str:
+    """'4.1 MB -> 1.2 MB (71% smaller)' for one product's images."""
+    out = sum(m.get("bytes", 0) for m in manifest)
+    src = sum(m.get("source_bytes") or m.get("bytes", 0) for m in manifest)
+
+    def mb(n: int) -> str:
+        return f"{n / 1024 / 1024:.1f} MB" if n >= 1024 * 1024 else f"{n / 1024:.0f} KB"
+
+    if not src:
+        return "0 KB"
+    pct = round(100 * (1 - out / src))
+    return f"{mb(src)} -> {mb(out)}" + (f" ({pct}% smaller)" if pct > 0 else "")
+
+
 # --------------------------------------------------------------------------- commands
 def cmd_grab(args) -> int:
     from . import scrape, summary
@@ -105,6 +119,7 @@ def cmd_grab(args) -> int:
     print(f"ours    : {config.our_title(data.title, data.vendor, urlparse(data.url).netloc)}")
     print(f"folder  : {out_dir}")
     print(f"images  : {len(manifest)} saved to {out_dir / 'competitor_imgs'} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
+    print(f"size    : {_size_line(manifest)}")
     print(f"summary : {md}")
     if not config.ANTHROPIC_ENABLED and not args.no_claude:
         print("note    : ANTHROPIC_API_KEY not set, summary is the raw-facts version")

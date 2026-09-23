@@ -44,7 +44,13 @@ USER_AGENT = os.environ.get(
 )
 MIN_IMAGE_BYTES = int(os.environ.get("PDP_MIN_IMAGE_BYTES", "8000"))   # skip icons / badges / pixels
 MAX_IMAGES = int(os.environ.get("PDP_MAX_IMAGES", "80"))
-CHROMIUM_PATH = os.environ.get("META_CHROMIUM_PATH", "").strip()   # shared with the tracker; empty = Playwright's own Chromium
+CHROMIUM_PATH = os.environ.get("META_CHROMIUM_PATH", "").strip()
+
+# --- Image compression (applied to every downloaded image) -------------------
+COMPRESS_IMAGES = os.environ.get("PDP_COMPRESS", "1").strip() not in ("0", "false", "no")
+IMAGE_MAX_PX = int(os.environ.get("PDP_IMAGE_MAX_PX", "2048"))     # longest side; 0 = no resize
+IMAGE_QUALITY = int(os.environ.get("PDP_IMAGE_QUALITY", "82"))     # JPEG/WebP quality
+IMAGE_FORMAT = os.environ.get("PDP_IMAGE_FORMAT", "jpeg").strip()  # jpeg / webp / png   # shared with the tracker; empty = Playwright's own Chromium
 
 # --- Claude (product_summary polish + guide text) ---------------------------
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")

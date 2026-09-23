@@ -23,7 +23,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 import requests
 from bs4 import BeautifulSoup
 
-from . import config
+from . import config, images
 
 log = logging.getLogger("pdpkit.scrape")
 
@@ -88,6 +88,24 @@ class PageData:
 
 
 # --------------------------------------------------------------------------- fetch
+def short_error(e: Exception) -> str:
+    """The part of a network traceback worth reading: 'connection refused', 'HTTP 403', a timeout."""
+    text = " ".join(str(e).split())
+    for pattern, msg in (("Connection refused", "connection refused (store unreachable)"),
+                         ("Name or service not known", "domain does not resolve"),
+                         ("getaddrinfo failed", "domain does not resolve"),
+                         ("NameResolutionError", "domain does not resolve"),
+                         ("timed out", "timed out"), ("SSLError", "TLS/certificate error"),
+                         ("CertificateError", "TLS/certificate error")):
+        if pattern.lower() in text.lower():
+            return msg
+    import re as _re
+    m = _re.search(r"\b([45]\d\d)\b", text)
+    if m:
+        return f"HTTP {m.group(1)} from the store"
+    return text[:160]
+
+
 def make_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(HTML_HEADERS)
@@ -105,7 +123,7 @@ def _get(session: requests.Session, url: str, **kw) -> requests.Response:
         except (requests.RequestException, requests.HTTPError) as e:
             last = e
             wait = 2 ** attempt
-            log.warning("GET %s failed (%s); retry in %ss", url, e, wait)
+            log.warning("GET %s: %s; retry in %ss", url, short_error(e), wait)
             time.sleep(wait)
     raise RuntimeError(f"GET {url} failed after {config.REQUEST_RETRIES} attempts: {last}")
 
@@ -281,7 +299,7 @@ def _walk_json(obj):
 
 # --------------------------------------------------------------------------- download
 def download_images(session: requests.Session, refs: list[ImageRef], dest: Path, delay_s: float = 0.4) -> list[dict]:
-    """Save every image into dest; returns a manifest (filename, url, alt, kind, bytes).
+    """Save every image into dest, compressed; returns a manifest (filename, url, alt, kind, bytes...).
     Names: gallery_01.jpg ... then page_01.jpg ...; duplicates by content hash are dropped."""
     dest.mkdir(parents=True, exist_ok=True)
     manifest: list[dict] = []
@@ -307,10 +325,17 @@ def download_images(session: requests.Session, refs: list[ImageRef], dest: Path,
         hashes.add(digest)
         ext = mimetypes.guess_extension(ctype) or Path(urlparse(ref.url).path).suffix or ".jpg"
         ext = {".jpe": ".jpg", ".jpeg": ".jpg"}.get(ext, ext)
+        shot = images.compress(r.content, ext)
         counters[ref.kind] += 1
-        name = f"{ref.kind}_{counters[ref.kind]:02d}{ext}"
-        (dest / name).write_bytes(r.content)
-        manifest.append({"file": name, "url": ref.url, "alt": ref.alt, "kind": ref.kind, "bytes": len(r.content), "sha1": digest})
+        name = f"{ref.kind}_{counters[ref.kind]:02d}{shot.ext}"
+        (dest / name).write_bytes(shot.data)
+        entry = {"file": name, "url": ref.url, "alt": ref.alt, "kind": ref.kind,
+                 "bytes": len(shot.data), "source_bytes": shot.original_bytes, "sha1": digest}
+        if shot.width:
+            entry["size"] = f"{shot.width}x{shot.height}"
+        if shot.note:
+            entry["compression"] = shot.note
+        manifest.append(entry)
         time.sleep(delay_s)
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
