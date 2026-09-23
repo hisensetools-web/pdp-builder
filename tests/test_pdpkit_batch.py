@@ -45,6 +45,13 @@ class UrlTests(unittest.TestCase):
         self.assertTrue(batch.is_store_url("https://babies-amity.com/products/wicked-for-good-tumbler"))
         self.assertTrue(batch.is_store_url("https://tykapryde.com/the-sol-light"))   # not a /products/ path
 
+    def test_marketplaces_count_as_product_pages(self):
+        # the sheet cites Amazon and Etsy as the product's source; those pages hold the images
+        for u in ("https://www.amazon.com/Candle-Warmer-Dimmer/dp/B0GFPBVVLQ/ref=sr_1_2?keywords=skull",
+                  "https://www.etsy.com/ie/listing/4360095387/ghostface-halloween-bling-mask?ref=sr_gallery-1-2",
+                  "https://www.aliexpress.com/item/100500.html"):
+            self.assertTrue(batch.is_store_url(u), u)
+
     def test_first_store_url_ignores_research_links_in_the_same_cell(self):
         cell = "https://www.pipiads.com/x https://babies-amity.com/products/t?utm_source=a  notes"
         self.assertEqual(batch.first_store_url(cell), "https://babies-amity.com/products/t")
@@ -87,8 +94,8 @@ class ProcessTests(unittest.TestCase):
     def test_one_failure_does_not_stop_the_batch(self):
         calls = []
 
-        def fake_grab(url, session=None, all_images=False, **kw):
-            calls.append(url)
+        def fake_grab(url, session=None, all_images=False, use_browser=None, **kw):
+            calls.append((url, use_browser))
             if "b.com" in url:
                 raise RuntimeError("HTTP 403 from the store")
             data = mock.Mock(title="X Thing", vendor="X", url=url)
@@ -98,10 +105,29 @@ class ProcessTests(unittest.TestCase):
              mock.patch("pdpkit.scrape.make_session"), mock.patch("pdpkit.summary.write_summary"), \
              mock.patch.object(batch, "find_existing", return_value=None):
             results = batch.process(self.rows)
-        self.assertEqual(len(calls), 3)
         self.assertEqual([r.status for r in results], ["grabbed", "failed", "grabbed"])
         self.assertIn("403", results[1].error)
         self.assertEqual(results[0].images, 2)
+        # the failing row was retried once with a browser before being given up on
+        self.assertEqual(calls, [("https://a.com/products/a", None), ("https://b.com/products/b", None),
+                                 ("https://b.com/products/b", True), ("https://c.com/products/c", None)])
+
+    def test_a_store_that_blocks_plain_requests_succeeds_on_the_browser_retry(self):
+        calls = []
+
+        def fake_grab(url, session=None, all_images=False, use_browser=None, **kw):
+            calls.append(use_browser)
+            if use_browser is not True:
+                raise RuntimeError("HTTP 503 from the store")
+            return mock.Mock(title="Amazon Thing", vendor="", url=url), Path("/tmp/x"), [{"kind": "gallery"}]
+
+        with mock.patch("pdpkit.scrape.grab", side_effect=fake_grab), \
+             mock.patch("pdpkit.scrape.make_session"), mock.patch("pdpkit.summary.write_summary"), \
+             mock.patch.object(batch, "find_existing", return_value=None):
+            results = batch.process(self.rows[:1])
+        self.assertEqual(calls, [None, True])
+        self.assertEqual(results[0].status, "grabbed")
+        self.assertIn("browser", results[0].steps)
 
     def test_already_grabbed_rows_are_skipped_unless_redo(self):
         with mock.patch("pdpkit.scrape.make_session"), \

@@ -30,10 +30,12 @@ URL_RE = re.compile(r"https?://[^\s,]+", re.I)
 NAME_HEADERS = ("product name", "product", "name", "title", "item")
 # tracking parameters that make one product URL look like ten
 TRACKING_PREFIXES = ("utm_", "ttclid", "fbclid", "gclid", "gad_", "msclkid", "epik", "irclickid", "_pos", "_sid", "_ss")
-# hosts that are research sources, never the competitor's product page
+# Research and social sources, never the product page we want. Marketplaces (Amazon, Etsy,
+# AliExpress) are NOT here: a sheet often cites them as the product's source, and their pages
+# carry the images we are after.
 NON_STORE_HOSTS = ("pipiads.com", "instagram.com", "tiktok.com", "vm.tiktok.com", "facebook.com", "youtube.com",
-                   "youtu.be", "google.com", "docs.google.com", "drive.google.com", "amazon.", "aliexpress.",
-                   "x.com", "twitter.com", "pinterest.", "reddit.com", "shopify.com/admin")
+                   "youtu.be", "google.com", "docs.google.com", "drive.google.com", "x.com", "twitter.com",
+                   "pinterest.", "reddit.com", "linkedin.com", "myshopify.com/admin")
 
 
 @dataclass
@@ -143,7 +145,8 @@ def find_existing(url: str) -> Path | None:
 
 
 def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False, all_images: bool = False,
-            limit: int | None = None, skip_existing: bool = True, dry_run: bool = False) -> list[Result]:
+            limit: int | None = None, skip_existing: bool = True, dry_run: bool = False,
+            browser: bool = False) -> list[Result]:
     from . import scrape, summary
 
     results: list[Result] = []
@@ -166,7 +169,16 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
         try:
             # the folder is named from the sheet, so it is the name you recognise
             out_dir = config.product_dir(config.slugify(row.name)) if row.name else None
-            data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session, all_images=all_images)
+            try:
+                data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session,
+                                                      all_images=all_images, use_browser=browser or None)
+            except Exception as first:  # noqa: BLE001 - stores that block plain requests (Amazon, Etsy) need a browser
+                if browser:
+                    raise
+                print(f"    {short_error(first)}; retrying with a browser")
+                data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session,
+                                                      all_images=all_images, use_browser=True)
+                res.steps.append("browser")
             summary.write_summary(data, out_dir, manifest)
             res.folder, res.images = str(out_dir), len(manifest)
             res.title = config.our_title(data.title, data.vendor, urlparse(data.url).netloc)

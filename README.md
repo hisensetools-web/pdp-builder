@@ -95,8 +95,8 @@ second run. What you do with the folder afterwards is manual: Higgsfield, then S
 
 ## A whole spreadsheet at once
 
-Export your product sheet (Google Sheets: **File > Download > Comma-separated values**), save it in this folder as
-`products.csv`, and run:
+Open the tab you want (a CSV export contains **only the tab you are looking at**, which is how you pick one sheet out
+of a workbook), then **File > Download > Comma-separated values**, save it in this folder as `products.csv`, and run:
 
 ```bash
 python pdp.py batch                 # grab every product in the sheet
@@ -107,7 +107,9 @@ python pdp.py batch mysheet.csv     # any other CSV
 ```
 
 No column setup needed: the URL column is found by looking at the values, so research links (pipiads, TikTok,
-Instagram, Google) are ignored and the competitor's product link is used, with tracking parameters stripped. Rows that
+Instagram, Google) are ignored and the product link is used, with tracking parameters stripped. Marketplace links
+(Amazon, Etsy, AliExpress) count as product pages, since a sheet often cites them as the source. A store that blocks
+plain requests is retried once in headless Chromium; `--browser` renders every row that way from the start. Rows that
 repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.

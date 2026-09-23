@@ -234,7 +234,8 @@ def cmd_batch(args) -> int:
     rows, note = batch.read_rows(path)
     print(f"{path.name}: {len(rows)} products ({note})")
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=args.all_images,
-                            limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run)
+                            limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run,
+                            browser=args.browser)
     batch.print_summary(results)
     if not args.dry_run:
         print(f"\nlog: {batch.write_log(results, path.with_name('batch_log.csv'))}")
@@ -434,6 +435,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--all-images", action="store_true", help="save every page image, not just the gallery")
     s.add_argument("--limit", type=int, help="only the first N products")
     s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
+    s.add_argument("--browser", action="store_true",
+                   help="render every page in headless Chromium (automatic anyway when a plain request fails)")
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
     add_image_opts(s)
     s.set_defaults(func=cmd_batch)

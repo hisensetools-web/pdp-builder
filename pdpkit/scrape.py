@@ -136,13 +136,21 @@ def fetch_html(session: requests.Session, url: str) -> str:
 
 def render_html(url: str, wait_ms: int = 4000) -> str:
     """Headless Chromium render for JS-heavy pages; scrolls to trigger lazy-loading."""
-    from playwright.sync_api import sync_playwright  # imported lazily: optional dependency at runtime
+    try:
+        from playwright.sync_api import sync_playwright  # imported lazily: optional dependency at runtime
+    except ImportError as e:
+        raise RuntimeError("this store needs a browser, and Playwright is not installed: "
+                           "python -m pip install playwright && python -m playwright install chromium") from e
 
     with sync_playwright() as p:
         kw = {"headless": True}
         if config.CHROMIUM_PATH:
             kw["executable_path"] = config.CHROMIUM_PATH
-        browser = p.chromium.launch(**kw)
+        try:
+            browser = p.chromium.launch(**kw)
+        except Exception as e:  # noqa: BLE001
+            raise RuntimeError(f"cannot start Chromium ({str(e).splitlines()[0][:120]}); "
+                               "run: python -m playwright install chromium") from e
         page = browser.new_page(user_agent=config.USER_AGENT, viewport={"width": 1366, "height": 900})
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
