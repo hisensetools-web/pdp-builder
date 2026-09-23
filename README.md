@@ -82,6 +82,25 @@ not tracked by git): one prompt per paragraph, `#` lines ignored, `{title}` `{ha
 Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `upload --handle x` / `--product-id N` (attach to an existing product), `upload --with-description`,
 `--dry-run` on `generate` and `upload`. A starter template is in `templates/pdp_template.example.md`.
 
+## A whole spreadsheet at once
+
+Export your product sheet (Google Sheets: **File > Download > Comma-separated values**), save it in this folder as
+`products.csv`, and run:
+
+```bash
+python pdp.py batch                 # grab every product in the sheet
+python pdp.py batch --guide         # ... and write each one's Fudge guide
+python pdp.py batch --limit 3       # try the first three first
+python pdp.py batch --dry-run       # list what it would grab, fetch nothing
+python pdp.py batch mysheet.csv     # any other CSV
+```
+
+No column setup needed: the URL column is found by looking at the values, so research links (pipiads, TikTok,
+Instagram, Google) are ignored and the competitor's product link is used, with tracking parameters stripped. Rows that
+repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
+the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
+`batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
+
 ## Branding
 
 Everything we create is ours, not the competitor's: `BRAND_NAME` (default SoleneLife) replaces their brand in the

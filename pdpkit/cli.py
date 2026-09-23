@@ -190,6 +190,26 @@ def cmd_run(args) -> int:
     return 0
 
 
+def cmd_batch(args) -> int:
+    """Run the pipeline over every product URL in a spreadsheet export."""
+    from . import batch
+    path = Path(args.csv)
+    if not path.is_file() and path.name == "products.csv" and config.PRODUCTS_EXAMPLE.exists():
+        path.write_text(config.PRODUCTS_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"created {path.name} from {config.PRODUCTS_EXAMPLE.name}; edit it or replace it with your own CSV export")
+    if not path.is_file():
+        raise SystemExit(f"{path} not found. In Google Sheets: File > Download > Comma-separated values (.csv), "
+                         "save it in this folder, then pass its name.")
+    rows, note = batch.read_rows(path)
+    print(f"{path.name}: {len(rows)} products ({note})")
+    results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=args.all_images,
+                            limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run)
+    batch.print_summary(results)
+    if not args.dry_run:
+        print(f"\nlog: {batch.write_log(results, path.with_name('batch_log.csv'))}")
+    return 0
+
+
 def cmd_hf_check(args) -> int:
     """Prove the Higgsfield backend works without spending credits."""
     from . import higgsfield, higgsfield_cli
@@ -363,6 +383,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("shopify-check", help="verify the Shopify app credentials and scopes (mints the token if needed)")
     s.set_defaults(func=cmd_shopify_check)
+
+    s = sub.add_parser("batch", help="grab every product URL in a spreadsheet export (CSV)")
+    s.add_argument("csv", nargs="?", default="products.csv", help="CSV exported from your sheet (default products.csv)")
+    s.add_argument("--guide", action="store_true", help="also write the Fudge guide for each product")
+    s.add_argument("--upload", action="store_true", help="also upload each product's generated images to Shopify")
+    s.add_argument("--all-images", action="store_true", help="save every page image, not just the gallery")
+    s.add_argument("--limit", type=int, help="only the first N products")
+    s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
+    s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
+    s.set_defaults(func=cmd_batch)
 
     s = sub.add_parser("list", help="what has been grabbed / generated / uploaded")
     s.set_defaults(func=cmd_list)

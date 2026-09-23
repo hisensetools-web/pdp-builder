@@ -6,3 +6,5 @@ data/shopify_token.json
 .pytest_cache/
 prompts.txt
 templates/*.pdf
+products.csv
+batch_log.csv

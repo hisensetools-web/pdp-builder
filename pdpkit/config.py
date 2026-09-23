@@ -84,6 +84,9 @@ SHOPIFY_REQUIRED_SCOPES = ("write_products", "write_files")
 # are filled from the grabbed product. prompts.txt is yours (gitignored); prompts.example.txt is the starter.
 PROMPTS_FILE = Path(os.environ.get("PDP_PROMPTS_FILE", ROOT / "prompts.txt"))
 PROMPTS_EXAMPLE = ROOT / "prompts.example.txt"
+# `batch` reads this CSV when none is named; created from products.example.csv on first use (gitignored, so it is yours)
+PRODUCTS_FILE = Path(os.environ.get("PDP_PRODUCTS_FILE", ROOT / "products.csv"))
+PRODUCTS_EXAMPLE = ROOT / "products.example.csv"
 
 # --- Brand ------------------------------------------------------------------
 BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles
