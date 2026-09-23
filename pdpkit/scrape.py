@@ -41,6 +41,14 @@ SKIP_URL_WORDS = (
 )
 # Shopify CDN size / crop suffixes: name_600x600.jpg, name_1024x.jpg, name_600x600_crop_center.jpg, name@2x.jpg
 _SHOPIFY_SIZE = re.compile(r"_(?:\d+x\d*|x\d+)(?:_crop_[a-z]+)?(?:@\dx)?(?=\.[a-z]{3,4}(?:\?|$))", re.I)
+# containers whose images are the product's own gallery / scroller
+GALLERY_HINT = re.compile(r"(product[-_ ]?(media|gallery|image|images|photo|photos|slider|carousel)|media[-_ ]?gallery"
+                          r"|gallery|carousel|slider|swiper|splide|flickity|glide|keen-slider|thumbnail)", re.I)
+# ... unless they are one of these, which are other products or page furniture
+GALLERY_EXCLUDE = re.compile(r"(related|recommend|upsell|cross[-_ ]?sell|also[-_ ]?(like|bought)|you[-_ ]?may"
+                             r"|similar|recently[-_ ]?viewed|complete[-_ ]?the|bundle[-_ ]?with|testimonial|review"
+                             r"|footer|site[-_ ]?header|navigation|announcement|logo|press|badge)", re.I)
+
 _SHOPIFY_CDN = re.compile(r"https?://[^\s\"'<>]+?/cdn/shop/(?:files|products)/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", re.I)
 _CDN_SHOPIFY = re.compile(r"https?://cdn\.shopify\.com/s/files/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", re.I)
 
@@ -198,6 +206,54 @@ def fetch_shopify_product(session: requests.Session, url: str) -> dict | None:
     return data.get("product") if isinstance(data, dict) else None
 
 
+_HANDLE_RE = re.compile(r"/products/([a-z0-9][a-z0-9\-_%]{1,120})(?=[\"'?#/\s\\]|$)", re.I)
+_NOT_A_HANDLE = {"all", "index", "json", "search"}
+
+
+def find_product_handle(html: str) -> str | None:
+    """The Shopify product a landing page is built around.
+
+    Landing pages like /the-sol-light have no product JSON of their own, but they link to the
+    real product. The canonical URL or og:url is the strongest signal; otherwise the handle
+    referenced most often across the page wins."""
+    soup = BeautifulSoup(html, "html.parser")
+    strong = []
+    canonical = soup.find("link", rel=lambda v: v and "canonical" in (v if isinstance(v, list) else [v]))
+    if canonical and canonical.get("href"):
+        strong.append(canonical["href"])
+    og = soup.find("meta", attrs={"property": "og:url"})
+    if og and og.get("content"):
+        strong.append(og["content"])
+    for value in strong:
+        m = _HANDLE_RE.search(value)
+        if m and m.group(1).lower() not in _NOT_A_HANDLE:
+            return m.group(1)
+
+    counts: dict[str, int] = {}
+    for m in _HANDLE_RE.finditer(html):
+        handle = m.group(1)
+        if handle.lower() in _NOT_A_HANDLE or handle.endswith((".js", ".json", ".css")):
+            continue
+        counts[handle] = counts.get(handle, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=lambda h: (counts[h], -len(h)))
+
+
+def fetch_product_by_handle(session: requests.Session, base_url: str, handle: str) -> dict | None:
+    origin = "{0.scheme}://{0.netloc}".format(urlparse(base_url))
+    try:
+        r = _get(session, f"{origin}/products/{handle}.json", headers={"Accept": "application/json"})
+    except RuntimeError:
+        return None
+    if r.status_code != 200 or "json" not in r.headers.get("content-type", ""):
+        return None
+    try:
+        return (r.json() or {}).get("product")
+    except ValueError:
+        return None
+
+
 # --------------------------------------------------------------------------- image urls
 def normalise_image_url(url: str, base: str) -> str:
     url = unescape(url.strip())
@@ -225,6 +281,26 @@ def _srcset_urls(value: str) -> list[str]:
             continue
         out.append(part.split()[0])
     return out
+
+
+def in_gallery_container(tag, depth: int = 6) -> bool:
+    """True when an <img> sits inside the product's own gallery / scroller, judged by the
+    class and id of its ancestors. Related-product carousels and page furniture do not count."""
+    node = tag
+    hit = False
+    for _ in range(depth):
+        node = getattr(node, "parent", None)
+        if node is None or not getattr(node, "get", None):
+            break
+        marker = " ".join(filter(None, [" ".join(node.get("class") or []), node.get("id") or "",
+                                        node.get("data-section-type") or ""]))
+        if not marker:
+            continue
+        if GALLERY_EXCLUDE.search(marker):
+            return False              # the nearest meaningful ancestor wins
+        if GALLERY_HINT.search(marker):
+            hit = True
+    return hit
 
 
 def extract_image_refs(html: str, base: str, product_json: dict | None = None) -> list[ImageRef]:
@@ -273,15 +349,17 @@ def extract_image_refs(html: str, base: str, product_json: dict | None = None) -
 
     for tag in soup.find_all(["img", "source"]):
         alt = tag.get("alt", "") or ""
-        for attr in ("src", "data-src", "data-original", "data-lazy", "data-zoom", "data-image", "data-srcset", "srcset", "data-lazy-srcset"):
+        kind = "gallery" if in_gallery_container(tag) else "page"
+        for attr in ("src", "data-src", "data-original", "data-lazy", "data-zoom", "data-image", "data-large_image",
+                     "data-full", "data-srcset", "srcset", "data-lazy-srcset"):
             val = tag.get(attr)
             if not val:
                 continue
             if "srcset" in attr:
                 for u in _srcset_urls(val):
-                    add(u, alt)
+                    add(u, alt, kind)
             else:
-                add(val, alt)
+                add(val, alt, kind)
     for tag in soup.find_all(style=re.compile(r"background(?:-image)?\s*:", re.I)):
         for m in re.finditer(r"url\((['\"]?)([^'\")]+)\1\)", tag["style"]):
             add(m.group(2))
@@ -529,6 +607,14 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     session = session or make_session()
     html = fetch_html(session, url)
     product_json = fetch_shopify_product(session, url)
+    discovered = None
+    if product_json is None:
+        # a landing page (/the-sol-light) rather than /products/<handle>: find the real product
+        discovered = find_product_handle(html)
+        if discovered:
+            product_json = fetch_product_by_handle(session, url, discovered)
+            if product_json:
+                log.info("landing page: using the gallery of /products/%s", discovered)
     refs = extract_image_refs(html, url, product_json)
     js_heavy = use_browser is True or (use_browser is None and len(refs) < 3 and not product_json)
     if js_heavy:
@@ -539,6 +625,8 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
         except Exception as e:  # noqa: BLE001 - a missing browser must not abort the grab
             log.warning("browser render failed (%s); keeping static HTML", e)
     data = extract_page_data(html, url, product_json)
+    if discovered and product_json:
+        data.handle = discovered
     data.images = refs
     slug = config.slugify(data.handle or data.title)
     out_dir = out_dir or config.product_dir(slug)

@@ -74,8 +74,10 @@ class ReadRowsTests(unittest.TestCase):
 
     def test_shipped_example_csv_parses(self):
         rows, _ = batch.read_rows(config.PRODUCTS_EXAMPLE)
-        self.assertGreaterEqual(len(rows), 10)
+        self.assertGreaterEqual(len(rows), 5)
         self.assertTrue(all(r.url.startswith("https://") and r.name for r in rows))
+        # the row with no competitor link yet is carried in the file but produces no work
+        self.assertNotIn("B&BW x Nightmare Before Christmas Candle Holder", [r.name for r in rows])
 
     def test_a_sheet_without_product_urls_says_so(self):
         with tempfile.TemporaryDirectory() as d:

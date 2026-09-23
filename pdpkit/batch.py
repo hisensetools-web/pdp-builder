@@ -187,7 +187,10 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             res.status = "grabbed"
             res.steps.append("grab")
             print(f"    {data.title}")
-            print(f"    {len(manifest)} images -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
+            gallery = sum(1 for m in manifest if m.get("kind") == "gallery")
+            print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
+            if manifest and not gallery:
+                print("    note: no product gallery found, so every page image was saved; --browser may find the scroller")
         except Exception as e:  # noqa: BLE001 - one bad store must not stop the batch
             res.status, res.error = "failed", short_error(e)
             results.append(res)

@@ -4,7 +4,7 @@ Give it a competitor product page and it produces everything needed to launch ou
 
 | what | where | command |
 |---|---|---|
-| the competitor's gallery images (top of fold; `--all-images` for the rest of the page), size suffixes stripped so you get the originals | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
+| the competitor's gallery images (top of fold; `--all-images` for the rest of the page), size suffixes stripped so you get the full-size files | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
 | summary of the competitor page (title, price/compare-at, variants, copy, headings in order, bullets, FAQ, trust lines, reviews) | `product_summary.md` + `product_summary.json` | `grab` |
 | new images rendered by Higgsfield from your prompt, with the competitor images as references | `<product name>_shopify_PDP_imgs/` + `generation_log.json` | `generate` |
 | those images uploaded to a **draft** Shopify product | `shopify_upload.json` | `upload` (`shopify-check` first) |
@@ -113,6 +113,21 @@ plain requests is retried once in headless Chromium; `--browser` renders every r
 repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
+
+## Finding the product's own photos
+
+The top-of-fold scroller is found three ways, in order of reliability:
+
+1. **`/products/<handle>.json`** when the URL is a normal Shopify product page.
+2. **The product behind a landing page.** A URL like `/the-sol-light` has no product JSON of its own, so the page is
+   searched for the product it is built around (canonical URL first, then the most-referenced `/products/<handle>`)
+   and that product's gallery is used.
+3. **Gallery containers.** Images inside elements whose class or id reads as a product gallery, carousel, slider,
+   swiper or thumbnail strip count as gallery images. Related-product carousels, testimonial sliders, headers and
+   footers are excluded.
+
+If none of the three finds anything, every image on the page is saved instead and the run says so. When the scroller
+is built by JavaScript, `--browser` renders the page first and usually finds it.
 
 ## Image compression
 

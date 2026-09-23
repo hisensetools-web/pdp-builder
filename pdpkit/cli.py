@@ -135,6 +135,9 @@ def cmd_grab(args) -> int:
     print(f"folder  : {out_dir}")
     print(f"images  : {len(manifest)} saved to {out_dir / 'competitor_imgs'} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
     print(f"size    : {_size_line(manifest)}")
+    if manifest and not any(m["kind"] == "gallery" for m in manifest):
+        print("note    : no product gallery found, so every page image was saved. If the product's own photos are "
+              "missing, retry with --browser (the scroller may be built by JavaScript).")
     print(f"summary : {md}")
     if not config.ANTHROPIC_ENABLED and not args.no_claude:
         print("note    : ANTHROPIC_API_KEY not set, summary is the raw-facts version")
