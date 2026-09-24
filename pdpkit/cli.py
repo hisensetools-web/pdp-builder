@@ -241,7 +241,12 @@ def cmd_batch(args) -> int:
                          "save it in this folder, then pass its name.")
     _apply_image_opts(args)
     rows, note = batch.read_rows(path)
-    print(f"{path.name}: {len(rows)} products ({note})")
+    print(f"{path.resolve()}")
+    print(f"{len(rows)} products ({note}):")
+    for r in rows:
+        print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
+    print("If this is not the list you expect, re-export the right tab of your sheet over this file "
+          "(a CSV export holds only the tab you are viewing).\n")
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=args.all_images,
                             limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run,
                             browser=args.browser)
