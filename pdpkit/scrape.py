@@ -138,7 +138,8 @@ def _get(session: requests.Session, url: str, **kw) -> requests.Response:
 
 def fetch_html(session: requests.Session, url: str) -> str:
     r = _get(session, url)
-    r.raise_for_status()
+    if r.status_code >= 400:
+        raise RuntimeError(f"HTTP {r.status_code} from the store for {url}")
     return r.text
 
 

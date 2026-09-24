@@ -121,13 +121,19 @@ def _size_line(manifest: list[dict]) -> str:
 def cmd_grab(args) -> int:
     from . import scrape, summary
     _apply_image_opts(args)
+    if "<" in args.url or ">" in args.url:
+        raise SystemExit(f"{args.url} still contains a placeholder. Open the product page in your browser and copy "
+                         "the address bar, e.g. https://tykapryde.com/products/sol-study-light")
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
     try:
         data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None, all_images=True if args.all_images else None)
-    except RuntimeError as e:
-        raise SystemExit(f"could not fetch {args.url}: {str(e).split('Caused by')[-1].strip(' ()')[:200]}\n"
-                         "Check the URL opens in your browser; if the store blocks scripts, retry with --browser.") from e
+    except Exception as e:  # noqa: BLE001 - one clear line beats a traceback
+        from . import scrape as _s
+        hint = ("The page does not exist: open it in your browser and copy the address bar."
+                if "404" in str(e) else
+                "Check the URL opens in your browser; if the store blocks scripts, retry with --browser.")
+        raise SystemExit(f"could not fetch {args.url}: {_s.short_error(e)}\n{hint}") from e
     md = summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
     from urllib.parse import urlparse
     print(f"product : {data.title}")
