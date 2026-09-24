@@ -159,3 +159,74 @@ class DownloadCompressionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CompressFolderTests(unittest.TestCase):
+    """`pdp.py compress <folder>` / compress_images.bat: everything under a product folder, light and in one place."""
+
+    def make_folder(self, root):
+        (root / "competitor_imgs").mkdir()
+        (root / "sol_shopify_PDP_imgs").mkdir()
+        (root / "competitor_imgs" / "gallery_01.png").write_bytes(png_bytes(1600, 1200))
+        (root / "competitor_imgs" / "hero.png").write_bytes(png_bytes(1200, 1200))
+        (root / "sol_shopify_PDP_imgs" / "hero.png").write_bytes(png_bytes(2600, 2600))   # heavy generator output, same stem
+        (root / "product_summary.md").write_text("not an image")
+        return root
+
+    def test_every_image_lands_in_compressed_as_light_webp(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self.make_folder(Path(d))
+            with mock.patch.multiple(config, HEAVY_FORMAT="webp", HEAVY_QUALITY=75, HEAVY_MAX_PX=2000):
+                results = images.compress_folder(root)
+            out = root / "compressed"
+            names = sorted(p.name for p in out.iterdir() if not p.name.startswith("."))
+        self.assertEqual(names, ["gallery_01.webp", "hero.webp", "sol_shopify_PDP_imgs-hero.webp"])  # collision keeps the subfolder
+        self.assertEqual(len(results), 3)
+        self.assertTrue(all(r["bytes"] < r["source_bytes"] for r in results))
+        big = next(r for r in results if r["source"].startswith("sol_"))
+        self.assertEqual(max(big["size"]), 2000)
+
+    def test_second_run_skips_done_files_and_picks_up_new_ones(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self.make_folder(Path(d))
+            with mock.patch.multiple(config, HEAVY_FORMAT="webp", HEAVY_QUALITY=75, HEAVY_MAX_PX=2000):
+                images.compress_folder(root)
+                (root / "sol_shopify_PDP_imgs" / "new.png").write_bytes(png_bytes(900, 900))
+                second = images.compress_folder(root)
+                third = images.compress_folder(root, redo=True)
+        self.assertEqual([r["source"] for r in second if not r["skipped"]], ["sol_shopify_PDP_imgs/new.png"])
+        self.assertEqual(sum(1 for r in second if r["skipped"]), 3)
+        self.assertEqual(sum(1 for r in third if r["skipped"]), 0)
+        # the compressed output itself is never treated as input
+        self.assertFalse(any(r["source"].startswith("compressed/") for r in third))
+
+    def test_in_place_replaces_the_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = self.make_folder(Path(d))
+            with mock.patch.multiple(config, HEAVY_FORMAT="jpeg", HEAVY_QUALITY=75, HEAVY_MAX_PX=2000):
+                images.compress_folder(root / "sol_shopify_PDP_imgs", in_place=True)
+            left = sorted(p.name for p in (root / "sol_shopify_PDP_imgs").iterdir() if not p.name.startswith("."))
+            self.assertEqual(left, ["hero.jpg"])
+            self.assertFalse((root / "compressed").exists())
+
+    def test_bat_file_points_at_this_checkout(self):
+        with tempfile.TemporaryDirectory() as d:
+            bat = images.write_compress_bat(Path(d))
+            body = bat.read_bytes()
+        self.assertEqual(bat.name, "compress_images.bat")
+        self.assertIn(str(config.ROOT / "pdp.py").encode(), body)
+        self.assertIn(b'compress "%~dp0."', body)
+        self.assertIn(b"\r\n", body)       # Windows line endings, cmd.exe is picky
+
+    def test_grab_drops_the_bat_into_the_product_folder(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "prod"
+            html = "<html><body><h1>Thing</h1></body></html>"
+            with mock.patch.object(scrape, "fetch_html", return_value=html), \
+                 mock.patch.object(scrape, "fetch_product_by_handle", return_value=None), \
+                 mock.patch.object(scrape, "find_product_in_catalogue", return_value=None), \
+                 mock.patch.object(scrape, "fetch_shopify_product", return_value=None), \
+                 mock.patch.object(scrape, "download_images", return_value=[]), \
+                 mock.patch.object(config, "USE_BROWSER", "never"):
+                scrape.grab("https://x.com/products/thing", out_dir=out, use_browser=False, session=mock.Mock())
+            self.assertTrue((out / "compress_images.bat").is_file())

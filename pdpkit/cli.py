@@ -433,6 +433,36 @@ def cmd_list(args) -> int:
     return 0
 
 
+def cmd_compress(args) -> int:
+    """Heavy-compress every image in a product folder into compressed/ (what compress_images.bat runs)."""
+    from . import images
+    target = Path(args.folder).expanduser()
+    if not target.is_dir():
+        candidate = config.product_dir(config.slugify(args.folder))
+        if candidate.is_dir():
+            target = candidate
+        else:
+            raise SystemExit(f"{args.folder} is not a folder (and there is no product called that under {config.OUTPUT_ROOT})")
+    if not images.available():
+        raise SystemExit("Pillow is not installed: run  python -m pip install pillow")
+    target = target.resolve()
+    where = "in place" if args.in_place else str(Path(args.out) if args.out else target / images.COMPRESSED_DIR)
+    print(f"compressing images under {target} -> {where}")
+    results = images.compress_folder(target, out=Path(args.out) if args.out else None, fmt=args.format,
+                                     quality=args.quality, max_px=args.max_px, in_place=args.in_place, redo=args.redo)
+    done = [r for r in results if not r["skipped"]]
+    for r in done:
+        note = f" ({r['note']})" if r.get("note") else ""
+        print(f"  {r['source']:50s} {r['source_bytes'] / 1024:7.0f} KB -> {r['bytes'] / 1024:6.0f} KB  {r['out']}{note}")
+    skipped = len(results) - len(done)
+    if not results:
+        print("  no images found (jpg / png / webp) in that folder or its subfolders")
+    else:
+        print(f"{len(done)} compressed" + (f", {skipped} already done (--redo to repeat them)" if skipped else "")
+              + f": {_size_line(results)}")
+    return 0
+
+
 # --------------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pdp.py", description="Clone a competitor PDP: images, summary, Higgsfield renders, Shopify upload, Fudge guide.")
@@ -547,6 +577,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("product", help="product slug (folder under pdp_output/) or a folder path")
     s.add_argument("--show", type=int, default=12, help="how many images to list (default 12)")
     s.set_defaults(func=cmd_inspect)
+
+    s = sub.add_parser("compress", help="heavy-compress every image in a product folder into compressed/ (what compress_images.bat runs)")
+    s.add_argument("folder", help="a product folder (or its name under pdp_output/); subfolders are included")
+    s.add_argument("--format", choices=["webp", "jpeg", "png"], help=f"output format (default {config.HEAVY_FORMAT})")
+    s.add_argument("--quality", type=int, help=f"WebP/JPEG quality (default {config.HEAVY_QUALITY})")
+    s.add_argument("--max-px", type=int, help=f"longest side in pixels, 0 = keep size (default {config.HEAVY_MAX_PX})")
+    s.add_argument("--out", help="write the compressed files somewhere other than <folder>/compressed/")
+    s.add_argument("--in-place", action="store_true", help="replace each image with its compressed version instead")
+    s.add_argument("--redo", action="store_true", help="recompress files already done on an earlier run")
+    s.set_defaults(func=cmd_compress)
 
     s = sub.add_parser("list", help="what has been grabbed / generated / uploaded")
     s.set_defaults(func=cmd_list)

@@ -823,6 +823,7 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     slug = config.slugify(data.handle or data.title)
     out_dir = out_dir or config.product_dir(slug)
     out_dir.mkdir(parents=True, exist_ok=True)
+    images.write_compress_bat(out_dir)
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     if product_json:
         (out_dir / "product.json").write_text(json.dumps(product_json, indent=2), encoding="utf-8")
@@ -849,6 +850,7 @@ def grab_via_browser(url: str, out_dir: Path | None = None, session: requests.Se
     data.images = refs[: config.MAX_IMAGES]
     out_dir = out_dir or config.product_dir(config.slugify(data.handle or data.title))
     out_dir.mkdir(parents=True, exist_ok=True)
+    images.write_compress_bat(out_dir)
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     manifest = download_images(session, select_for_download(data.images, all_images), out_dir / "competitor_imgs",
                                captured=captured, referer=url)

@@ -5,6 +5,7 @@ Give it a competitor product page and it produces everything needed to launch ou
 | what | where | command |
 |---|---|---|
 | every image on the competitor's page, rendered in headless Chromium so JavaScript-only slides and lazy images are included, size suffixes stripped so you get the full-size files, compressed (`--gallery-only` keeps just the product scroller) | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
+| `compress_images.bat`: double-click after pasting the Higgsfield images in, and every image in the folder lands in `compressed/` as light WebP | `compress_images.bat` -> `compressed/` | `grab` writes it; `compress` runs it |
 | summary of the competitor page (title, price/compare-at, variants, copy, headings in order, bullets, FAQ, trust lines, reviews) | `product_summary.md` + `product_summary.json` | `grab` |
 | new images rendered by Higgsfield from your prompt, with the competitor images as references | `<product name>_shopify_PDP_imgs/` + `generation_log.json` | `generate` |
 | those images uploaded to a **draft** Shopify product | `shopify_upload.json` | `upload` (`shopify-check` first) |
@@ -114,6 +115,26 @@ plain requests is retried once in headless Chromium without the plain fetch; `--
 repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
+
+## Compressing a whole product folder (the Higgsfield output too)
+
+Every product folder gets a **`compress_images.bat`**. Paste the images Higgsfield produced anywhere in that folder
+(the `<name>_shopify_PDP_imgs/` folder, or straight in), double-click the .bat, and every image under the folder,
+competitor photos included, is written to **`compressed/`** as light WebP: longest side 2000 px, quality 75, which
+turns a 14 MB PNG into ~250 KB. Nothing is deleted; the originals stay where they were. Run it again after adding
+more images and only the new ones are processed.
+
+The same thing from a terminal, with the knobs:
+
+```powershell
+python pdp.py compress "pdp_output\sol-study-light"       # or just:  python pdp.py compress sol-study-light
+python pdp.py compress sol-study-light --format jpeg --quality 70 --max-px 1600
+python pdp.py compress sol-study-light --in-place        # replace the files instead of writing compressed/
+python pdp.py compress sol-study-light --redo            # recompress files done on an earlier run
+```
+
+The .bat accepts the same flags (`compress_images.bat --format jpeg`). Defaults live in `.env`: `PDP_HEAVY_FORMAT`,
+`PDP_HEAVY_QUALITY`, `PDP_HEAVY_MAX_PX`. A file that would not get smaller is copied as it is.
 
 ## Finding the product's own photos
 

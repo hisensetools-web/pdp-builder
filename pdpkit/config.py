@@ -52,7 +52,11 @@ IMAGE_MAX_PX = int(os.environ.get("PDP_IMAGE_MAX_PX", "2048"))     # longest sid
 IMAGE_QUALITY = int(os.environ.get("PDP_IMAGE_QUALITY", "82"))     # JPEG/WebP quality
 IMAGE_FORMAT = os.environ.get("PDP_IMAGE_FORMAT", "jpeg").strip()  # jpeg / webp / png
 # keep the store's untouched file too, in competitor_imgs/originals/
-KEEP_ORIGINALS = os.environ.get("PDP_KEEP_ORIGINALS", "").strip() in ("1", "true", "yes")   # shared with the tracker; empty = Playwright's own Chromium
+KEEP_ORIGINALS = os.environ.get("PDP_KEEP_ORIGINALS", "").strip() in ("1", "true", "yes")
+# `pdp.py compress <folder>` / compress_images.bat: the heavy preset for everything in a product folder
+HEAVY_FORMAT = os.environ.get("PDP_HEAVY_FORMAT", "webp").strip()    # webp / jpeg / png
+HEAVY_QUALITY = int(os.environ.get("PDP_HEAVY_QUALITY", "75"))
+HEAVY_MAX_PX = int(os.environ.get("PDP_HEAVY_MAX_PX", "2000"))       # longest side; 0 = never resize
 
 # --- Claude (product_summary polish + guide text) ---------------------------
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
