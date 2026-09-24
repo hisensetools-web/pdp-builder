@@ -99,7 +99,8 @@ PRODUCTS_EXAMPLE = ROOT / "products.example.csv"
 # --- Brand ------------------------------------------------------------------
 BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles
 BRAND_SUFFIX = os.environ.get("BRAND_SUFFIX", "").strip()               # optional, e.g. "by SoleneLife" instead of a prefix
-GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "").strip() in ("1", "true", "yes")   # default: gallery (top-of-fold) only
+GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "1").strip() not in ("0", "false", "no")   # default: every image on the page
+USE_BROWSER = os.environ.get("PDP_BROWSER", "auto").strip().lower()      # auto = render every page when Playwright is installed; never = static only
 
 # --- Pricing (same on every product): one-time three-tier bundle, tier 2 pre-selected ------------
 # Override with PDP_PRICING as JSON: [{"name": "...", "price": 39.95, "compare_at": 79.90}, ...]

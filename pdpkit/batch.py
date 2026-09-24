@@ -38,6 +38,10 @@ NON_STORE_HOSTS = ("pipiads.com", "instagram.com", "tiktok.com", "vm.tiktok.com"
                    "pinterest.", "reddit.com", "linkedin.com", "myshopify.com/admin")
 
 
+class RowError(RuntimeError):
+    """An already-readable reason for a row's failure (not to be shortened again)."""
+
+
 @dataclass
 class Row:
     name: str
@@ -144,9 +148,9 @@ def find_existing(url: str) -> Path | None:
     return None
 
 
-def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False, all_images: bool = False,
+def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False, all_images: bool | None = None,
             limit: int | None = None, skip_existing: bool = True, dry_run: bool = False,
-            browser: bool = False) -> list[Result]:
+            browser: bool | None = None) -> list[Result]:
     from . import scrape, summary
 
     results: list[Result] = []
@@ -171,13 +175,15 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             out_dir = config.product_dir(config.slugify(row.name)) if row.name else None
             try:
                 data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session,
-                                                      all_images=all_images, use_browser=browser or None)
-            except Exception as first:  # noqa: BLE001 - stores that block plain requests (Amazon, Etsy) need a browser
-                if browser:
+                                                      all_images=all_images, use_browser=browser)
+            except Exception as first:  # noqa: BLE001 - a store that blocks plain requests (Amazon, Etsy) may still render
+                if browser is not None:
                     raise
-                print(f"    {short_error(first)}; retrying with a browser")
-                data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session,
-                                                      all_images=all_images, use_browser=True)
+                print(f"    {short_error(first)}; retrying with the browser only")
+                try:
+                    data, out_dir, manifest = scrape.grab_via_browser(row.url, out_dir=out_dir, session=session, all_images=all_images)
+                except Exception as second:  # noqa: BLE001
+                    raise RowError(f"{short_error(first)}; browser retry: {short_error(second) if 'HTTP' in str(second) else str(second)[:120]}") from second
                 res.steps.append("browser")
             summary.write_summary(data, out_dir, manifest)
             res.folder, res.images = str(out_dir), len(manifest)
@@ -190,9 +196,9 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             gallery = sum(1 for m in manifest if m.get("kind") == "gallery")
             print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
             if manifest and not gallery:
-                print("    note: no product gallery found, so every page image was saved; --browser may find the scroller")
+                print("    note: no separate product gallery detected; every image on the page is saved as page_NN")
         except Exception as e:  # noqa: BLE001 - one bad store must not stop the batch
-            res.status, res.error = "failed", short_error(e)
+            res.status, res.error = "failed", (str(e) if isinstance(e, RowError) else short_error(e))
             results.append(res)
             log.debug("grab failed for %s: %s", row.url, e)
             print(f"    FAILED: {res.error}")

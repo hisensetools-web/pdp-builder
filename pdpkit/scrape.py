@@ -153,13 +153,42 @@ def fetch_html(session: requests.Session, url: str) -> str:
     return r.text
 
 
-def render_html(url: str, wait_ms: int = 4000) -> str:
-    """Headless Chromium render for JS-heavy pages; scrolls to trigger lazy-loading."""
+def browser_available() -> bool:
+    try:
+        from playwright.sync_api import sync_playwright  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def render_page(url: str, wait_ms: int = 4000) -> tuple[str, dict[str, bytes]]:
+    """Open the page in headless Chromium, scroll it, wake every lazy image and carousel, and
+    return the rendered HTML plus the bytes of every image the browser actually loaded, keyed
+    by normalised URL (largest variant kept). Whatever the visitor sees, we have."""
     try:
         from playwright.sync_api import sync_playwright  # imported lazily: optional dependency at runtime
     except ImportError as e:
-        raise RuntimeError("this store needs a browser, and Playwright is not installed: "
-                           "python -m pip install playwright && python -m playwright install chromium") from e
+        raise RuntimeError("Playwright is not installed: python -m pip install playwright && "
+                           "python -m playwright install chromium") from e
+
+    captured: dict[str, bytes] = {}
+
+    def on_response(resp):
+        try:
+            ctype = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+            if not ctype.startswith("image/") or ctype in ("image/svg+xml", "image/gif"):
+                return
+            if resp.status != 200:
+                return
+            body = resp.body()
+            if len(body) < config.MIN_IMAGE_BYTES:
+                return
+            key = normalise_image_url(resp.url, url)
+            if _is_image_url(key) or "cdn" in key or "static" in key:
+                if len(body) > len(captured.get(key, b"")):
+                    captured[key] = body
+        except Exception:  # noqa: BLE001 - a body we cannot read is not worth failing the page for
+            pass
 
     with sync_playwright() as p:
         kw = {"headless": True}
@@ -171,35 +200,52 @@ def render_html(url: str, wait_ms: int = 4000) -> str:
             raise RuntimeError(f"cannot start Chromium ({str(e).splitlines()[0][:120]}); "
                                "run: python -m playwright install chromium") from e
         page = browser.new_page(user_agent=config.USER_AGENT, viewport={"width": 1366, "height": 900})
+        page.on("response", on_response)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
         height = page.evaluate("document.body.scrollHeight")
         y = 0
-        while y < height and y < 30000:
+        while y < height and y < 40000:
             y += 700
             page.evaluate(f"window.scrollTo(0, {y})")
-            page.wait_for_timeout(350)
+            page.wait_for_timeout(300)
             height = page.evaluate("document.body.scrollHeight")
-        # carousels only render the visible slide: force every lazy image to load and scroll
-        # each horizontally scrollable strip to its end
+        # carousels only render the visible slide: force every lazy image to load, then walk each
+        # horizontal strip slide by slide (some sliders only fetch the slide that becomes active)
         page.evaluate("""() => {
             document.querySelectorAll('img').forEach(i => {
                 i.loading = 'eager';
                 for (const a of ['data-src','data-original','data-lazy','data-large_image','data-full']) {
                     const v = i.getAttribute(a);
-                    if (v && !i.src.includes(v)) i.setAttribute('src', v);
+                    if (v && !(i.src || '').includes(v)) i.setAttribute('src', v);
                 }
             });
-            document.querySelectorAll('*').forEach(el => {
-                if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = el.scrollWidth;
+            document.querySelectorAll('[data-original],[data-bg],[data-background-image]').forEach(el => {
+                const v = el.getAttribute('data-original') || el.getAttribute('data-bg') || el.getAttribute('data-background-image');
+                if (v && el.tagName !== 'IMG') el.style.backgroundImage = 'url(' + v + ')';
             });
         }""")
-        page.wait_for_timeout(2500)
-        page.evaluate("() => document.querySelectorAll('*').forEach(el => { if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = 0; })")
-        page.wait_for_timeout(1200)
+        page.wait_for_timeout(1500)
+        strips = page.evaluate("() => [...document.querySelectorAll('*')].filter(el => el.scrollWidth > el.clientWidth + 40).length")
+        for step in range(1, 13):                       # up to 12 slides per strip
+            page.evaluate(f"() => document.querySelectorAll('*').forEach(el => {{ if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = el.clientWidth * {step}; }})")
+            page.wait_for_timeout(400 if strips else 50)
+        # click through any "next slide" buttons too, for sliders that ignore scrollLeft
+        page.evaluate("""() => {
+            const sel = '[class*="next"],[aria-label*="next" i],[class*="arrow-right"],[class*="slick-next"],[class*="swiper-button-next"],[class*="t-slds__arrow_right"]';
+            for (let k = 0; k < 12; k++) document.querySelectorAll(sel).forEach(b => { try { b.click(); } catch (e) {} });
+        }""")
+        page.wait_for_timeout(2000)
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_timeout(500)
         html = page.content()
         browser.close()
-    return html
+    return html, captured
+
+
+def render_html(url: str, wait_ms: int = 4000) -> str:
+    """Rendered HTML only (kept for callers that do not need the captured images)."""
+    return render_page(url, wait_ms)[0]
 
 
 # --------------------------------------------------------------------------- shopify json
@@ -456,8 +502,9 @@ def extract_image_refs(html: str, base: str, product_json: dict | None = None) -
             else:
                 add(val, tag.get("alt", "") or "", kind)
     for tag in soup.find_all(style=re.compile(r"background(?:-image)?\s*:", re.I)):
+        kind = "gallery" if in_gallery_container(tag) else "page"
         for m in re.finditer(r"url\((['\"]?)([^'\")]+)\1\)", tag["style"]):
-            add(m.group(2))
+            add(m.group(2), tag.get("alt", "") or "", kind)
 
     # raw-source sweep: image URLs inside inline JSON / scripts that the DOM walk misses.
     # Shopify's CDN first (those are product photos), then any other absolute image URL.
@@ -480,49 +527,69 @@ def _walk_json(obj):
 
 
 # --------------------------------------------------------------------------- download
-def download_images(session: requests.Session, refs: list[ImageRef], dest: Path, delay_s: float = 0.4) -> list[dict]:
+def _sniff_ext(data: bytes, fallback: str = ".jpg") -> str:
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    if data[4:12] in (b"ftypavif", b"ftypavis"):
+        return ".avif"
+    return fallback
+
+
+def download_images(session: requests.Session, refs: list[ImageRef], dest: Path, delay_s: float = 0.4,
+                    captured: dict[str, bytes] | None = None, referer: str = "") -> list[dict]:
     """Save every image into dest, compressed; returns a manifest (filename, url, alt, kind, bytes...).
-    Names: gallery_01.jpg ... then page_01.jpg ...; duplicates by content hash are dropped."""
+    Names: gallery_01.jpg ... then page_01.jpg ...; duplicates by content hash are dropped.
+    `captured` holds bytes the browser already loaded: used when a direct download is refused,
+    too small, or not an image (hot-linking protection, signed URLs, cookie-gated CDNs)."""
     dest.mkdir(parents=True, exist_ok=True)
+    captured = captured or {}
     manifest: list[dict] = []
     hashes: set[str] = set()
     counters = {"gallery": 0, "page": 0}
     for ref in refs:
+        content, ctype, source = b"", "", "download"
         try:
-            r = _get(session, ref.url, headers={"Accept": "image/avif,image/webp,image/*,*/*;q=0.8", "Referer": ref.url})
+            r = _get(session, ref.url, headers={"Accept": "image/avif,image/webp,image/*,*/*;q=0.8",
+                                                "Referer": referer or ref.url})
+            if r.status_code == 200 and r.content:
+                ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
+                if ctype.startswith("image/") and len(r.content) >= config.MIN_IMAGE_BYTES:
+                    content = r.content
         except RuntimeError as e:
-            log.warning("skip %s: %s", ref.url, e)
+            log.debug("direct download of %s failed: %s", ref.url, e)
+        if not content and ref.url in captured:
+            content, source = captured[ref.url], "browser"
+            ctype = ""
+        if not content:
+            log.warning("skip %s: not downloadable", ref.url)
             continue
-        if r.status_code != 200 or not r.content:
-            log.warning("skip %s: HTTP %s", ref.url, r.status_code)
-            continue
-        ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
-        if not ctype.startswith("image/"):
-            continue
-        if len(r.content) < config.MIN_IMAGE_BYTES:
-            continue
-        digest = hashlib.sha1(r.content).hexdigest()
+        digest = hashlib.sha1(content).hexdigest()
         if digest in hashes:
             continue
         hashes.add(digest)
-        ext = mimetypes.guess_extension(ctype) or Path(urlparse(ref.url).path).suffix or ".jpg"
+        ext = (mimetypes.guess_extension(ctype) if ctype else None) or _sniff_ext(content, Path(urlparse(ref.url).path).suffix or ".jpg")
         ext = {".jpe": ".jpg", ".jpeg": ".jpg"}.get(ext, ext)
-        shot = images.compress(r.content, ext)
+        shot = images.compress(content, ext)
         counters[ref.kind] += 1
         name = f"{ref.kind}_{counters[ref.kind]:02d}{shot.ext}"
         (dest / name).write_bytes(shot.data)
         if config.KEEP_ORIGINALS and shot.note != "original":
             originals = dest / "originals"
             originals.mkdir(exist_ok=True)
-            (originals / f"{ref.kind}_{counters[ref.kind]:02d}{ext}").write_bytes(r.content)
-        entry = {"file": name, "url": ref.url, "alt": ref.alt, "kind": ref.kind,
+            (originals / f"{ref.kind}_{counters[ref.kind]:02d}{ext}").write_bytes(content)
+        entry = {"file": name, "url": ref.url, "alt": ref.alt, "kind": ref.kind, "via": source,
                  "bytes": len(shot.data), "source_bytes": shot.original_bytes, "sha1": digest}
         if shot.width:
             entry["size"] = f"{shot.width}x{shot.height}"
         if shot.note:
             entry["compression"] = shot.note
         manifest.append(entry)
-        time.sleep(delay_s)
+        if source == "download":
+            time.sleep(delay_s)
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
 
@@ -687,7 +754,8 @@ def extract_page_data(html: str, url: str, product_json: dict | None = None) -> 
 
 
 def select_for_download(refs: list[ImageRef], all_images: bool) -> list[ImageRef]:
-    """Gallery only by default; everything when asked, or when the page exposes no gallery at all."""
+    """Everything by default. gallery-only keeps just the product photos, unless the page
+    exposes no gallery at all, in which case everything is kept rather than nothing."""
     if all_images or not any(r.kind == "gallery" for r in refs):
         return refs
     return [r for r in refs if r.kind == "gallery"]
@@ -696,9 +764,12 @@ def select_for_download(refs: list[ImageRef], all_images: bool) -> list[ImageRef
 # --------------------------------------------------------------------------- orchestration
 def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None, session: requests.Session | None = None,
          all_images: bool | None = None) -> tuple[PageData, Path, list[dict]]:
-    """Competitor grab: page facts + images saved to <out_dir>/competitor_imgs/.
-    By default only the gallery (top-of-fold product photos) is saved; all_images=True also saves
-    the rest of the page's images (infographics, lifestyle blocks)."""
+    """Download every image on a product page into <out_dir>/competitor_imgs/, plus the page facts.
+
+    Static HTML and the store's product JSON are read first; then, unless told not to, the page
+    is opened in headless Chromium, scrolled, its carousels stepped through, and every image the
+    browser loads is captured. The union of both is saved: gallery photos named gallery_NN,
+    everything else page_NN. all_images=False keeps only the gallery."""
     all_images = config.GRAB_ALL_IMAGES if all_images is None else all_images
     session = session or make_session()
     html = fetch_html(session, url)
@@ -718,14 +789,33 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
                 discovered = product_json.get("handle")
                 log.info("landing page: matched the store catalogue to /products/%s", discovered)
     refs = extract_image_refs(html, url, product_json)
-    js_heavy = use_browser is True or (use_browser is None and len(refs) < 3 and not product_json)
-    if js_heavy:
-        log.info("few images in static HTML; rendering with headless Chromium")
+
+    captured: dict[str, bytes] = {}
+    want_browser = use_browser if use_browser is not None else config.USE_BROWSER != "never"
+    if want_browser:
         try:
-            html = render_html(url)
-            refs = extract_image_refs(html, url, product_json)
+            rendered, captured = render_page(url)
+            rendered_refs = extract_image_refs(rendered, url, product_json)
+            known = {r.url: r for r in refs}
+            for r in rendered_refs:
+                if r.url not in known:
+                    refs.append(r)
+                    known[r.url] = r
+                elif r.kind == "gallery":
+                    known[r.url].kind = "gallery"
+            for key in captured:
+                if key not in known:
+                    refs.append(ImageRef(url=key, kind="page", order=len(refs) + 1))
+                    known[key] = refs[-1]
+            html = rendered
+            log.info("browser: %d images seen on the page, %d captured from the network", len(rendered_refs), len(captured))
         except Exception as e:  # noqa: BLE001 - a missing browser must not abort the grab
-            log.warning("browser render failed (%s); keeping static HTML", e)
+            if use_browser is True:
+                raise
+            log.warning("browser render skipped (%s); using static HTML only", short_error(e) if "HTTP" in str(e) else str(e)[:160])
+    refs.sort(key=lambda r: (0 if r.kind == "gallery" else 1, r.order))
+    refs = refs[: config.MAX_IMAGES]
+
     data = extract_page_data(html, url, product_json)
     if discovered and product_json:
         data.handle = discovered
@@ -736,6 +826,31 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     if product_json:
         (out_dir / "product.json").write_text(json.dumps(product_json, indent=2), encoding="utf-8")
-    manifest = download_images(session, select_for_download(refs, all_images), out_dir / "competitor_imgs")
+    manifest = download_images(session, select_for_download(refs, all_images), out_dir / "competitor_imgs",
+                               captured=captured, referer=url)
+    (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+    return data, out_dir, manifest
+
+
+def grab_via_browser(url: str, out_dir: Path | None = None, session: requests.Session | None = None,
+                     all_images: bool | None = None) -> tuple[PageData, Path, list[dict]]:
+    """grab() for stores that refuse the first plain request (Amazon, Etsy): the HTML comes from the
+    browser render and the images from what the browser loaded, no static fetch at all."""
+    all_images = config.GRAB_ALL_IMAGES if all_images is None else all_images
+    session = session or make_session()
+    html, captured = render_page(url)
+    refs = extract_image_refs(html, url, None)
+    known = {r.url for r in refs}
+    for key in captured:
+        if key not in known:
+            refs.append(ImageRef(url=key, kind="page", order=len(refs) + 1))
+    refs.sort(key=lambda r: (0 if r.kind == "gallery" else 1, r.order))
+    data = extract_page_data(html, url, None)
+    data.images = refs[: config.MAX_IMAGES]
+    out_dir = out_dir or config.product_dir(config.slugify(data.handle or data.title))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "page_source.html").write_text(html, encoding="utf-8")
+    manifest = download_images(session, select_for_download(data.images, all_images), out_dir / "competitor_imgs",
+                               captured=captured, referer=url)
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest

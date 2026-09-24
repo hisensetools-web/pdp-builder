@@ -4,7 +4,7 @@ Give it a competitor product page and it produces everything needed to launch ou
 
 | what | where | command |
 |---|---|---|
-| the competitor's gallery images (top of fold; `--all-images` for the rest of the page), size suffixes stripped so you get the full-size files | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
+| every image on the competitor's page, rendered in headless Chromium so JavaScript-only slides and lazy images are included, size suffixes stripped so you get the full-size files, compressed (`--gallery-only` keeps just the product scroller) | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
 | summary of the competitor page (title, price/compare-at, variants, copy, headings in order, bullets, FAQ, trust lines, reviews) | `product_summary.md` + `product_summary.json` | `grab` |
 | new images rendered by Higgsfield from your prompt, with the competitor images as references | `<product name>_shopify_PDP_imgs/` + `generation_log.json` | `generate` |
 | those images uploaded to a **draft** Shopify product | `shopify_upload.json` | `upload` (`shopify-check` first) |
@@ -74,8 +74,8 @@ with every reference passed as `--image` (default model `nano_banana_2`, change 
 cloud.higgsfield.ai; `HIGGSFIELD_MODEL` / `HIGGSFIELD_IMAGE_ARG` pick the model and the request field that carries the
 reference-image URLs (default `openai/gpt-image-2/edit` / `image_urls`). `python pdp.py hf-check [--backend cli|api]`
 verifies the credentials without spending credits, and `generate --dry-run` prints the exact request or command.
-Shopify pages are read through `/products/<handle>.json`; other platforms fall back
-to HTML parsing and, when the page is JavaScript-rendered, a headless Chromium pass (`grab --browser` forces it).
+Shopify pages are read through `/products/<handle>.json`; every page is also rendered in headless Chromium
+when Playwright is installed (`--no-browser` skips that, `--browser` requires it).
 **Prompts** live in `prompts.txt` in this folder (created from `prompts.example.txt` on first use, then yours to edit,
 not tracked by git): one prompt per paragraph, `#` lines ignored, `{title}` `{handle}` `{vendor}` `{price}`
 `{product_type}` filled from the grabbed product. `--prompt` / `--prompt-file` override it for one run.
@@ -89,9 +89,10 @@ git pull
 python pdp.py batch          # every product in products.csv -> one folder each, images compressed
 ```
 
-One folder per product under `pdp_output/`, named from your sheet, holding the competitor's gallery images
-(compressed and ready for Higgsfield) plus `product_summary.md` with the page's facts. Nothing is re-downloaded on a
-second run. What you do with the folder afterwards is manual: Higgsfield, then Shopify.
+One folder per product under `pdp_output/`, named from your sheet, holding **every image on the competitor's
+page** (compressed, no duplicates, product scroller first as `gallery_NN`, the rest as `page_NN`) plus
+`product_summary.md` with the page's facts. Nothing is re-downloaded on a second run. What you do with the folder
+afterwards is manual: Higgsfield, then Shopify.
 
 ## A whole spreadsheet at once
 
@@ -109,14 +110,22 @@ python pdp.py batch mysheet.csv     # any other CSV
 No column setup needed: the URL column is found by looking at the values, so research links (pipiads, TikTok,
 Instagram, Google) are ignored and the product link is used, with tracking parameters stripped. Marketplace links
 (Amazon, Etsy, AliExpress) count as product pages, since a sheet often cites them as the source. A store that blocks
-plain requests is retried once in headless Chromium; `--browser` renders every row that way from the start. Rows that
+plain requests is retried once in headless Chromium without the plain fetch; `--no-browser` skips rendering. Rows that
 repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
 
 ## Finding the product's own photos
 
-The top-of-fold scroller is found three ways, in order of reliability:
+Every image on the page is saved by default. When Playwright is installed the page is first rendered in headless
+Chromium: lazy images are forced to load, every carousel is scrolled to its end and its "next" button clicked, and
+every image the browser fetches is captured off the network, so slides that exist only after a click and images the
+store refuses to serve to a plain request (hot-link protection) still land in the folder. `--no-browser` skips the
+render (static HTML only); `--browser` makes it required instead of best effort.
+
+The files are named after where the image sits: the product scroller (top of fold) as `gallery_NN`, everything else as
+`page_NN`, so the ones for Higgsfield are at the top of the folder. `--gallery-only` saves just the scroller. That
+scroller is found these ways, in order of reliability:
 
 1. **`/products/<handle>.json`** when the URL is a normal Shopify product page.
 2. **The product behind a landing page.** A URL like `/the-sol-light` has no product JSON of its own, so the page is
@@ -132,9 +141,7 @@ The top-of-fold scroller is found three ways, in order of reliability:
    swiper or thumbnail strip count as gallery images. Related-product carousels, testimonial sliders, headers and
    footers are excluded.
 
-If none of them finds anything, every image on the page is saved instead and the run says so. `--browser` renders the
-page first, forces lazy images to load and scrolls each carousel to its end, which usually reaches a JavaScript-built
-scroller.
+If none of them recognises a scroller, everything is still saved as `page_NN` and the run says so.
 
 When a store still gives the wrong images, `python pdp.py inspect <product>` explains what the extractor saw in the
 page already saved: the product links and ids on the page, which one it would use, every image with the containers

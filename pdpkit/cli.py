@@ -103,6 +103,20 @@ def _apply_image_opts(args) -> None:
         config.IMAGE_FORMAT = args.format
 
 
+def _browser_choice(args):
+    if getattr(args, "no_browser", False):
+        return False
+    if getattr(args, "browser", False):
+        return True
+    return None          # auto: render when Playwright is installed
+
+
+def _images_choice(args):
+    if getattr(args, "gallery_only", False):
+        return False
+    return None          # default from config: everything
+
+
 def _size_line(manifest: list[dict]) -> str:
     """'4.1 MB -> 1.2 MB (71% smaller)' for one product's images."""
     out = sum(m.get("bytes", 0) for m in manifest)
@@ -127,7 +141,7 @@ def cmd_grab(args) -> int:
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
     try:
-        data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None, all_images=True if args.all_images else None)
+        data, out_dir, manifest = scrape.grab(args.url, use_browser=_browser_choice(args), all_images=_images_choice(args))
     except Exception as e:  # noqa: BLE001 - one clear line beats a traceback
         from . import scrape as _s
         hint = ("The page does not exist: open it in your browser and copy the address bar."
@@ -141,9 +155,11 @@ def cmd_grab(args) -> int:
     print(f"folder  : {out_dir}")
     print(f"images  : {len(manifest)} saved to {out_dir / 'competitor_imgs'} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
     print(f"size    : {_size_line(manifest)}")
+    via = sum(1 for m in manifest if m.get("via") == "browser")
+    if via:
+        print(f"note    : {via} image(s) came from the browser capture (the store refused a direct download)")
     if manifest and not any(m["kind"] == "gallery" for m in manifest):
-        print("note    : no product gallery found, so every page image was saved. If the product's own photos are "
-              "missing, retry with --browser (the scroller may be built by JavaScript).")
+        print("note    : no separate product gallery was detected; every image on the page is saved as page_NN")
     print(f"summary : {md}")
     if not config.ANTHROPIC_ENABLED and not args.no_claude:
         print("note    : ANTHROPIC_API_KEY not set, summary is the raw-facts version")
@@ -204,7 +220,7 @@ def cmd_guide(args) -> int:
 def cmd_run(args) -> int:
     """grab -> generate -> upload -> guide, stopping at the first missing prerequisite."""
     from . import scrape, summary
-    data, out_dir, manifest = scrape.grab(args.url, use_browser=True if args.browser else None, all_images=True if args.all_images else None)
+    data, out_dir, manifest = scrape.grab(args.url, use_browser=_browser_choice(args), all_images=_images_choice(args))
     summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
     print(f"[1/4] grabbed {len(manifest)} images -> {out_dir}")
     name = args.name or data.title or data.handle
@@ -247,9 +263,9 @@ def cmd_batch(args) -> int:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
     print("If this is not the list you expect, re-export the right tab of your sheet over this file "
           "(a CSV export holds only the tab you are viewing).\n")
-    results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=args.all_images,
+    results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=_images_choice(args),
                             limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run,
-                            browser=args.browser)
+                            browser=_browser_choice(args))
     batch.print_summary(results)
     if not args.dry_run:
         print(f"\nlog: {batch.write_log(results, path.with_name('batch_log.csv'))}")
@@ -455,8 +471,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("grab", help="download every image on a competitor PDP + write product_summary")
     s.add_argument("url")
-    s.add_argument("--browser", action="store_true", help="force a headless Chromium render (JS-heavy pages)")
-    s.add_argument("--all-images", action="store_true", help="also save the page's other images, not just the gallery")
+    s.add_argument("--browser", action="store_true", help="require the headless Chromium render (fail instead of falling back to static HTML)")
+    s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
+    s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
+    s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos, not the rest of the page")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude rewrite of the summary")
     add_image_opts(s)
     s.set_defaults(func=cmd_grab)
@@ -484,7 +502,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("url")
     s.add_argument("--name")
     s.add_argument("--browser", action="store_true")
-    s.add_argument("--all-images", action="store_true")
+    s.add_argument("--no-browser", action="store_true")
+    s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)
+    s.add_argument("--gallery-only", action="store_true")
     s.add_argument("--no-claude", action="store_true")
     add_generate_opts(s)
     add_upload_opts(s)
@@ -513,11 +533,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("csv", nargs="?", default="products.csv", help="CSV exported from your sheet (default products.csv)")
     s.add_argument("--guide", action="store_true", help="also write the Fudge guide for each product")
     s.add_argument("--upload", action="store_true", help="also upload each product's generated images to Shopify")
-    s.add_argument("--all-images", action="store_true", help="save every page image, not just the gallery")
+    s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
+    s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos, not the rest of the page")
     s.add_argument("--limit", type=int, help="only the first N products")
     s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
-    s.add_argument("--browser", action="store_true",
-                   help="render every page in headless Chromium (automatic anyway when a plain request fails)")
+    s.add_argument("--browser", action="store_true", help="require the Chromium render for every row (fail rather than fall back)")
+    s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
     add_image_opts(s)
     s.set_defaults(func=cmd_batch)

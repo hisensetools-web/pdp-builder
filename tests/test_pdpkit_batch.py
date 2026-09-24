@@ -104,30 +104,35 @@ class ProcessTests(unittest.TestCase):
             return data, Path("/tmp/x"), [{"kind": "gallery"}, {"kind": "gallery"}]
 
         with mock.patch("pdpkit.scrape.grab", side_effect=fake_grab), \
+             mock.patch("pdpkit.scrape.grab_via_browser", side_effect=RuntimeError("HTTP 503 from the store")) as via, \
              mock.patch("pdpkit.scrape.make_session"), mock.patch("pdpkit.summary.write_summary"), \
              mock.patch.object(batch, "find_existing", return_value=None):
             results = batch.process(self.rows)
         self.assertEqual([r.status for r in results], ["grabbed", "failed", "grabbed"])
-        self.assertIn("403", results[1].error)
+        self.assertIn("403", results[1].error)                 # the original refusal is what gets reported
+        self.assertIn("browser retry", results[1].error)
         self.assertEqual(results[0].images, 2)
-        # the failing row was retried once with a browser before being given up on
         self.assertEqual(calls, [("https://a.com/products/a", None), ("https://b.com/products/b", None),
-                                 ("https://b.com/products/b", True), ("https://c.com/products/c", None)])
+                                 ("https://c.com/products/c", None)])
+        via.assert_called_once()                                # the failing row was retried browser-only
 
     def test_a_store_that_blocks_plain_requests_succeeds_on_the_browser_retry(self):
         calls = []
 
-        def fake_grab(url, session=None, all_images=False, use_browser=None, **kw):
-            calls.append(use_browser)
-            if use_browser is not True:
-                raise RuntimeError("HTTP 503 from the store")
+        def fake_grab(url, session=None, all_images=None, use_browser=None, **kw):
+            calls.append("static")
+            raise RuntimeError("HTTP 503 from the store")
+
+        def fake_via_browser(url, out_dir=None, session=None, all_images=None):
+            calls.append("browser")
             return mock.Mock(title="Amazon Thing", vendor="", url=url), Path("/tmp/x"), [{"kind": "gallery"}]
 
         with mock.patch("pdpkit.scrape.grab", side_effect=fake_grab), \
+             mock.patch("pdpkit.scrape.grab_via_browser", side_effect=fake_via_browser), \
              mock.patch("pdpkit.scrape.make_session"), mock.patch("pdpkit.summary.write_summary"), \
              mock.patch.object(batch, "find_existing", return_value=None):
             results = batch.process(self.rows[:1])
-        self.assertEqual(calls, [None, True])
+        self.assertEqual(calls, ["static", "browser"])
         self.assertEqual(results[0].status, "grabbed")
         self.assertIn("browser", results[0].steps)
 
