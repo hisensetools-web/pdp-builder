@@ -43,14 +43,24 @@ SKIP_URL_WORDS = (
 _SHOPIFY_SIZE = re.compile(r"_(?:\d+x\d*|x\d+)(?:_crop_[a-z]+)?(?:@\dx)?(?=\.[a-z]{3,4}(?:\?|$))", re.I)
 # containers whose images are the product's own gallery / scroller
 GALLERY_HINT = re.compile(r"(product[-_ ]?(media|gallery|image|images|photo|photos|slider|carousel)|media[-_ ]?gallery"
-                          r"|gallery|carousel|slider|swiper|splide|flickity|glide|keen-slider|thumbnail)", re.I)
+                          r"|gallery|carousel|slider|swiper|splide|flickity|glide|keen-slider|thumbnail"
+                          r"|t-slds|t-store__prod|tn-atom|js-product|main[-_ ]?image|photo[-_ ]?main|zoom)", re.I)
 # ... unless they are one of these, which are other products or page furniture
 GALLERY_EXCLUDE = re.compile(r"(related|recommend|upsell|cross[-_ ]?sell|also[-_ ]?(like|bought)|you[-_ ]?may"
                              r"|similar|recently[-_ ]?viewed|complete[-_ ]?the|bundle[-_ ]?with|testimonial|review"
                              r"|footer|site[-_ ]?header|navigation|announcement|logo|press|badge)", re.I)
 
+# every attribute a store or page builder may hide the real image behind
+LAZY_ATTRS = ("data-src", "data-original", "data-lazy", "data-zoom", "data-image", "data-large_image", "data-large",
+              "data-full", "data-bg", "data-background", "data-background-image", "data-bgset", "data-thumb",
+              "data-srcset", "data-lazy-srcset", "data-retina", "content")
+IMG_ATTRS = ("src", "srcset") + LAZY_ATTRS
+
 _SHOPIFY_CDN = re.compile(r"https?://[^\s\"'<>]+?/cdn/shop/(?:files|products)/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", re.I)
 _CDN_SHOPIFY = re.compile(r"https?://cdn\.shopify\.com/s/files/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", re.I)
+# any absolute image URL, including the escaped \/ form used inside embedded JSON
+# backslashes stay inside the class: an embedded JSON string writes the path as a\/b\/c.jpg
+_ANY_IMAGE_URL = re.compile(r"https?:\\?/\\?/[^\s\"'<>)]+?\.(?:jpe?g|png|webp|avif)", re.I)
 
 
 @dataclass
@@ -419,8 +429,7 @@ def extract_image_refs(html: str, base: str, product_json: dict | None = None) -
     for tag in soup.find_all(["img", "source"]):
         alt = tag.get("alt", "") or ""
         kind = "gallery" if in_gallery_container(tag) else "page"
-        for attr in ("src", "data-src", "data-original", "data-lazy", "data-zoom", "data-image", "data-large_image",
-                     "data-full", "data-srcset", "srcset", "data-lazy-srcset"):
+        for attr in IMG_ATTRS:
             val = tag.get(attr)
             if not val:
                 continue
@@ -429,14 +438,32 @@ def extract_image_refs(html: str, base: str, product_json: dict | None = None) -
                     add(u, alt, kind)
             else:
                 add(val, alt, kind)
+
+    # page builders (Tilda, Elementor, Webflow, Shogun) hang the real image off a <div>
+    for tag in soup.find_all(True):
+        if tag.name in ("img", "source"):
+            continue
+        kind = None
+        for attr in LAZY_ATTRS:
+            val = tag.get(attr)
+            if not val or not isinstance(val, str):
+                continue
+            if kind is None:
+                kind = "gallery" if in_gallery_container(tag) else "page"
+            if "srcset" in attr:
+                for u in _srcset_urls(val):
+                    add(u, tag.get("alt", "") or "", kind)
+            else:
+                add(val, tag.get("alt", "") or "", kind)
     for tag in soup.find_all(style=re.compile(r"background(?:-image)?\s*:", re.I)):
         for m in re.finditer(r"url\((['\"]?)([^'\")]+)\1\)", tag["style"]):
             add(m.group(2))
 
-    # raw-source sweep: CDN URLs inside inline JSON / scripts that the DOM walk misses
-    for rx in (_SHOPIFY_CDN, _CDN_SHOPIFY):
+    # raw-source sweep: image URLs inside inline JSON / scripts that the DOM walk misses.
+    # Shopify's CDN first (those are product photos), then any other absolute image URL.
+    for rx in (_SHOPIFY_CDN, _CDN_SHOPIFY, _ANY_IMAGE_URL):
         for m in rx.finditer(html):
-            add(m.group(0))
+            add(m.group(0).replace("\\/", "/"))
 
     refs = sorted(seen.values(), key=lambda r: (0 if r.kind == "gallery" else 1, r.order))
     return refs[: config.MAX_IMAGES]

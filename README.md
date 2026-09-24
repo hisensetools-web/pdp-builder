@@ -124,7 +124,11 @@ The top-of-fold scroller is found three ways, in order of reliability:
    and that product's gallery is used.
 3. **The store's catalogue.** A landing page that never links to a product still carries its variant id in the
    add-to-cart form, so `/products.json` is matched on product id, then variant id, then title.
-4. **Gallery containers.** Images inside elements whose class or id reads as a product gallery, carousel, slider,
+4. **Page builders.** Tilda, Elementor, Webflow and Shogun hang the real image off a `<div>` (`data-original`,
+   `data-bg`, `data-content-cover-bg`) with only a blurred placeholder in the inline style, and keep the remaining
+   slides in an embedded JSON blob. Those attributes are read on every tag, not just `<img>`, and any image URL in
+   the raw source is swept up, including the escaped `a\/b\/c.jpg` form used inside JSON.
+5. **Gallery containers.** Images inside elements whose class or id reads as a product gallery, carousel, slider,
    swiper or thumbnail strip count as gallery images. Related-product carousels, testimonial sliders, headers and
    footers are excluded.
 
