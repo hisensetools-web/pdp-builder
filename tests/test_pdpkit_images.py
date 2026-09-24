@@ -230,3 +230,16 @@ class CompressFolderTests(unittest.TestCase):
                  mock.patch.object(config, "USE_BROWSER", "never"):
                 scrape.grab("https://x.com/products/thing", out_dir=out, use_browser=False, session=mock.Mock())
             self.assertTrue((out / "compress_images.bat").is_file())
+
+    def test_ensure_bats_backfills_folders_grabbed_earlier(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "skull-candle-warmer" / "competitor_imgs").mkdir(parents=True)
+            (root / "has-one").mkdir()
+            images.write_compress_bat(root / "has-one")
+            before = (root / "has-one" / "compress_images.bat").stat().st_mtime_ns
+            added = images.ensure_bats(root)
+            self.assertEqual(added, [root / "skull-candle-warmer"])
+            self.assertTrue((root / "skull-candle-warmer" / "compress_images.bat").is_file())
+            self.assertEqual((root / "has-one" / "compress_images.bat").stat().st_mtime_ns, before)   # untouched
+            self.assertEqual(images.ensure_bats(root), [])

@@ -222,3 +222,21 @@ def write_compress_bat(folder: Path) -> Path:
     path = Path(folder) / BAT_NAME
     path.write_text("\r\n".join(lines), encoding="utf-8")
     return path
+
+
+def product_folders(root: Path | None = None) -> list[Path]:
+    root = Path(root or config.OUTPUT_ROOT)
+    if not root.is_dir():
+        return []
+    return sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def ensure_bats(root: Path | None = None) -> list[Path]:
+    """Drop compress_images.bat into every product folder that does not have one yet (folders grabbed
+    before the .bat existed, or where it was deleted). Returns the folders that got one."""
+    added = []
+    for folder in product_folders(root):
+        if not (folder / BAT_NAME).is_file():
+            write_compress_bat(folder)
+            added.append(folder)
+    return added

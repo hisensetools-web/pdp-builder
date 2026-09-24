@@ -263,6 +263,8 @@ def cmd_batch(args) -> int:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
     print("If this is not the list you expect, re-export the right tab of your sheet over this file "
           "(a CSV export holds only the tab you are viewing).\n")
+    from . import images
+    images.ensure_bats()      # folders grabbed before compress_images.bat existed get one too (skipped rows included)
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=_images_choice(args),
                             limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run,
                             browser=_browser_choice(args))
@@ -418,10 +420,14 @@ def cmd_inspect(args) -> int:
 
 
 def cmd_list(args) -> int:
+    from . import images
     root = config.OUTPUT_ROOT
     if not root.exists():
         print(f"nothing yet in {root}")
         return 0
+    added = images.ensure_bats(root)
+    if added:
+        print(f"compress_images.bat added to {len(added)} folder(s) grabbed before it existed")
     for d in sorted(p for p in root.iterdir() if p.is_dir()):
         comp = d / "competitor_imgs"
         n_comp = sum(1 for p in comp.iterdir() if p.suffix.lower() in (".jpg", ".png", ".webp", ".jpeg")) if comp.exists() else 0
@@ -436,6 +442,20 @@ def cmd_list(args) -> int:
 def cmd_compress(args) -> int:
     """Heavy-compress every image in a product folder into compressed/ (what compress_images.bat runs)."""
     from . import images
+    if not images.available():
+        raise SystemExit("Pillow is not installed: run  python -m pip install pillow")
+    if not args.folder:
+        # no folder given: every product folder, and make sure each one has its .bat
+        added = images.ensure_bats()
+        folders = images.product_folders()
+        if not folders:
+            raise SystemExit(f"nothing under {config.OUTPUT_ROOT} yet")
+        print(f"{len(folders)} product folders under {config.OUTPUT_ROOT}"
+              + (f", compress_images.bat added to {len(added)}" if added else ""))
+        for folder in folders:
+            args.folder = str(folder)
+            cmd_compress(args)
+        return 0
     target = Path(args.folder).expanduser()
     if not target.is_dir():
         candidate = config.product_dir(config.slugify(args.folder))
@@ -443,9 +463,9 @@ def cmd_compress(args) -> int:
             target = candidate
         else:
             raise SystemExit(f"{args.folder} is not a folder (and there is no product called that under {config.OUTPUT_ROOT})")
-    if not images.available():
-        raise SystemExit("Pillow is not installed: run  python -m pip install pillow")
     target = target.resolve()
+    if target.parent == config.OUTPUT_ROOT.resolve() and not (target / images.BAT_NAME).is_file():
+        images.write_compress_bat(target)
     where = "in place" if args.in_place else str(Path(args.out) if args.out else target / images.COMPRESSED_DIR)
     print(f"compressing images under {target} -> {where}")
     results = images.compress_folder(target, out=Path(args.out) if args.out else None, fmt=args.format,
@@ -579,7 +599,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_inspect)
 
     s = sub.add_parser("compress", help="heavy-compress every image in a product folder into compressed/ (what compress_images.bat runs)")
-    s.add_argument("folder", help="a product folder (or its name under pdp_output/); subfolders are included")
+    s.add_argument("folder", nargs="?", help="a product folder (or its name under pdp_output/); subfolders are included. "
+                   "No folder = every product folder")
     s.add_argument("--format", choices=["webp", "jpeg", "png"], help=f"output format (default {config.HEAVY_FORMAT})")
     s.add_argument("--quality", type=int, help=f"WebP/JPEG quality (default {config.HEAVY_QUALITY})")
     s.add_argument("--max-px", type=int, help=f"longest side in pixels, 0 = keep size (default {config.HEAVY_MAX_PX})")

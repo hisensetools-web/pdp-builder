@@ -133,6 +133,8 @@ python pdp.py compress sol-study-light --in-place        # replace the files ins
 python pdp.py compress sol-study-light --redo            # recompress files done on an earlier run
 ```
 
+`python pdp.py compress` with no folder does every product folder. Folders grabbed before the .bat existed get one the next time you run `batch`, `list` or `compress`.
+
 The .bat accepts the same flags (`compress_images.bat --format jpeg`). Defaults live in `.env`: `PDP_HEAVY_FORMAT`,
 `PDP_HEAVY_QUALITY`, `PDP_HEAVY_MAX_PX`. A file that would not get smaller is copied as it is.
 
