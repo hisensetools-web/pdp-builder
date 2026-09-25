@@ -196,3 +196,33 @@ class ProcessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SheetTests(unittest.TestCase):
+    LINK = "https://docs.google.com/spreadsheets/d/1O35L85zhY_5WMnsG8gEKN0bKx7oziTUMlbn6r3TJ1J0/edit?gid=395636284#gid=395636284"
+
+    def test_export_url_targets_the_linked_tab(self):
+        self.assertEqual(batch.sheet_export_url(self.LINK),
+                         "https://docs.google.com/spreadsheets/d/1O35L85zhY_5WMnsG8gEKN0bKx7oziTUMlbn6r3TJ1J0/export?format=csv&gid=395636284")
+        self.assertEqual(batch.sheet_export_url("https://docs.google.com/spreadsheets/d/abc/edit"),
+                         "https://docs.google.com/spreadsheets/d/abc/export?format=csv")
+        self.assertTrue(batch.is_sheet_url(self.LINK))
+        self.assertFalse(batch.is_sheet_url("products.csv"))
+
+    def test_fetch_writes_the_csv(self):
+        session = mock.Mock()
+        session.get.return_value = mock.Mock(status_code=200, content=b"Product Name,Competition\nA,https://a.com/products/a\n",
+                                             url="https://docs.google.com/spreadsheets/d/x/export?format=csv&gid=1")
+        with tempfile.TemporaryDirectory() as d:
+            path = batch.fetch_sheet(self.LINK, Path(d) / "products.csv", session=session)
+            rows, _ = batch.read_rows(path)
+        self.assertEqual([r.url for r in rows], ["https://a.com/products/a"])
+        self.assertIn("gid=395636284", session.get.call_args[0][0])
+
+    def test_private_sheet_is_explained(self):
+        session = mock.Mock()
+        session.get.return_value = mock.Mock(status_code=200, content=b"<!DOCTYPE html><html>Sign in</html>",
+                                             url="https://accounts.google.com/ServiceLogin?x")
+        with tempfile.TemporaryDirectory() as d, self.assertRaises(SystemExit) as cm:
+            batch.fetch_sheet(self.LINK, Path(d) / "products.csv", session=session)
+        self.assertIn("Anyone with the link", str(cm.exception))

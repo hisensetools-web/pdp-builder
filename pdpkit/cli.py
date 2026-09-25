@@ -263,7 +263,15 @@ def cmd_run(args) -> int:
 def cmd_batch(args) -> int:
     """Run the pipeline over every product URL in a spreadsheet export."""
     from . import batch
-    path = Path(args.csv)
+    # a Google Sheets link (on the command line, or PDP_SHEET_URL in .env) is pulled fresh every run,
+    # so a row added to the sheet is picked up without a manual export
+    sheet = args.csv if batch.is_sheet_url(args.csv) else (config.SHEET_URL if args.csv == "products.csv" else "")
+    if sheet:
+        path = Path("products.csv") if batch.is_sheet_url(args.csv) else Path(args.csv)
+        batch.fetch_sheet(sheet, path)
+        print(f"sheet tab downloaded -> {path.name}")
+    else:
+        path = Path(args.csv)
     if not path.is_file() and path.name == "products.csv" and config.PRODUCTS_EXAMPLE.exists():
         path.write_text(config.PRODUCTS_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
         print(f"created {path.name} from {config.PRODUCTS_EXAMPLE.name}; edit it or replace it with your own CSV export")
@@ -276,8 +284,12 @@ def cmd_batch(args) -> int:
     print(f"{len(rows)} products ({note}):")
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
-    print("If this is not the list you expect, re-export the right tab of your sheet over this file "
-          "(a CSV export holds only the tab you are viewing).\n")
+    if sheet:
+        print("If this is not the list you expect, check the #gid= in the sheet link points at the right tab.\n")
+    else:
+        print("If this is not the list you expect, re-export the right tab of your sheet over this file "
+              "(a CSV export holds only the tab you are viewing), or put the sheet link in .env as PDP_SHEET_URL "
+              "so batch pulls it fresh every run.\n")
     from . import images
     images.ensure_bats()      # folders grabbed before compress_images.bat existed get one too (skipped rows included)
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=_images_choice(args),
@@ -599,7 +611,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_shopify_check)
 
     s = sub.add_parser("batch", help="grab every product URL in a spreadsheet export (CSV)")
-    s.add_argument("csv", nargs="?", default="products.csv", help="CSV exported from your sheet (default products.csv)")
+    s.add_argument("csv", nargs="?", default="products.csv",
+                   help="CSV exported from your sheet (default products.csv), or the Google Sheets link of the tab to pull fresh")
     s.add_argument("--guide", action="store_true", help="also write the Fudge guide for each product")
     s.add_argument("--upload", action="store_true", help="also upload each product's generated images to Shopify")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now

@@ -129,7 +129,8 @@ def short_error(e: Exception) -> str:
         if pattern.lower() in text.lower():
             return msg
     import re as _re
-    m = _re.search(r"\b([45]\d\d)\b", text)
+    # a port number (":443", "port=443") is not a status code
+    m = _re.search(r"(?<![:=\s]port[ =])(?<!:)\b([45]\d\d)\b", _re.sub(r"(port[ =]|:)\d+", " ", text))
     if m:
         return f"HTTP {m.group(1)} from the store"
     return text[:160]

@@ -97,7 +97,17 @@ afterwards is manual: Higgsfield, then Shopify.
 
 ## A whole spreadsheet at once
 
-Open the tab you want (a CSV export contains **only the tab you are looking at**, which is how you pick one sheet out
+The easiest way: share the sheet as **Anyone with the link (Viewer)**, open the tab you want, copy the address bar
+(it ends in `#gid=...`, which is the tab) and put it in `.env`:
+
+```
+PDP_SHEET_URL=https://docs.google.com/spreadsheets/d/1O35.../edit?gid=395636284#gid=395636284
+```
+
+`python pdp.py batch` then downloads that tab fresh on every run, so a row added to the sheet is picked up next
+time without exporting anything. The same link works once on the command line: `python pdp.py batch "<link>"`.
+
+Otherwise, the manual export: Open the tab you want (a CSV export contains **only the tab you are looking at**, which is how you pick one sheet out
 of a workbook), then **File > Download > Comma-separated values**, save it in this folder as `products.csv`, and run:
 
 ```bash

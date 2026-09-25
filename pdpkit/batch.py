@@ -104,6 +104,47 @@ def first_store_url(cell: str) -> str:
     return ""
 
 
+_SHEET_ID = re.compile(r"docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]+)")
+_GID = re.compile(r"[#?&]gid=(\d+)")
+
+
+def is_sheet_url(text: str) -> bool:
+    return bool(_SHEET_ID.search(text or ""))
+
+
+def sheet_export_url(url: str) -> str:
+    """The CSV export of exactly the tab the link points at (#gid=...); the first tab without one."""
+    m = _SHEET_ID.search(url)
+    if not m:
+        raise ValueError(f"not a Google Sheets link: {url}")
+    gid = _GID.search(url)
+    return (f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=csv"
+            + (f"&gid={gid.group(1)}" if gid else ""))
+
+
+def fetch_sheet(url: str, dest: Path, session=None) -> Path:
+    """Download one tab of a Google Sheet as CSV to dest (the file `batch` then reads). Needs the
+    sheet shared as 'Anyone with the link: Viewer'; a private sheet comes back as a sign-in page."""
+    import requests
+    export = sheet_export_url(url)
+    session = session or requests.Session()
+    try:
+        r = session.get(export, timeout=(10, 60), allow_redirects=True)
+    except requests.RequestException as e:
+        raise SystemExit(f"could not download the sheet: {short_error(e)}") from e
+    body = r.content
+    head = body[:400].lstrip().lower()
+    if r.status_code in (401, 403) or head.startswith(b"<!doctype") or head.startswith(b"<html") \
+            or b"accounts.google.com" in r.url.encode():
+        raise SystemExit("the sheet is private, so Google sent a sign-in page instead of the tab. In Google Sheets: "
+                         "Share > General access > 'Anyone with the link' (Viewer), then run again. "
+                         "(Or export the tab yourself: File > Download > CSV, saved as products.csv.)")
+    if r.status_code >= 400:
+        raise SystemExit(f"could not download the sheet: HTTP {r.status_code}")
+    dest.write_bytes(body)
+    return dest
+
+
 def read_rows(path: Path) -> tuple[list[Row], str]:
     """Rows with a usable product URL, plus a note on which columns were used."""
     with path.open(newline="", encoding="utf-8-sig") as f:

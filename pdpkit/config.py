@@ -99,6 +99,9 @@ PROMPTS_EXAMPLE = ROOT / "prompts.example.txt"
 # `batch` reads this CSV when none is named; created from products.example.csv on first use (gitignored, so it is yours)
 PRODUCTS_FILE = Path(os.environ.get("PDP_PRODUCTS_FILE", ROOT / "products.csv"))
 PRODUCTS_EXAMPLE = ROOT / "products.example.csv"
+# The Google Sheet tab to pull instead of a manual CSV export (the link from your address bar, with #gid=...).
+# The sheet must be shared "Anyone with the link: Viewer".
+SHEET_URL = os.environ.get("PDP_SHEET_URL", "").strip()
 
 # --- Brand ------------------------------------------------------------------
 BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles
