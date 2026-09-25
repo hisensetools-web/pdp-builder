@@ -32,7 +32,7 @@ NAME_HEADERS = ("product name", "product", "name", "title", "item")
 TRACKING_PREFIXES = ("utm_", "ttclid", "fbclid", "gclid", "gad_", "msclkid", "epik", "irclickid", "_pos", "_sid", "_ss",
                      # Etsy search-result junk: ?ls=s&ga_order=...&ref=sr_gallery-1-2&sr_prefetch=1&content_source=...
                      "ga_", "ref", "sr_prefetch", "pf_from", "sts", "content_source", "organic_search_click", "logging_key",
-                     "ls", "click_key", "click_sum", "frs", "plkey", "pro", "sca_ref", "th", "psc", "keywords", "qid", "sr", "sprefix")
+                     "ls", "click_key", "click_sum", "frs", "plkey", "pro", "sca_ref", "th", "psc", "keywords", "qid", "sr", "sprefix", "dib")
 # Research and social sources, never the product page we want. Marketplaces (Amazon, Etsy,
 # AliExpress) are NOT here: a sheet often cites them as the product's source, and their pages
 # carry the images we are after.
@@ -71,9 +71,18 @@ def cli_size(manifest: list[dict]) -> str:
     return _size_line(manifest)
 
 
+_AMAZON_ASIN = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?=[/?#]|$)", re.I)
+
+
 def clean_url(url: str) -> str:
-    """Drop tracking parameters and fragments; keep the rest of the query (?variant= matters)."""
+    """Drop tracking parameters and fragments; keep the rest of the query (?variant= matters).
+    An Amazon link collapses to https://www.amazon.xx/dp/ASIN: the title slug, /ref=sr_1_10 and
+    the search parameters are all noise around the ASIN."""
     u = urlparse(url.strip().rstrip(").,;"))
+    if "amazon." in u.netloc.lower():
+        m = _AMAZON_ASIN.search(u.path)
+        if m:
+            return urlunparse((u.scheme, u.netloc, f"/dp/{m.group(1).upper()}", "", "", ""))
     kept = [(k, v) for k, v in parse_qsl(u.query, keep_blank_values=True)
             if not any(k.lower().startswith(p) for p in TRACKING_PREFIXES)]
     return urlunparse((u.scheme, u.netloc, u.path, u.params, urlencode(kept), ""))

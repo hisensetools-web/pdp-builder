@@ -123,13 +123,17 @@ listing. The run says so (`the store showed a bot check`). Run it again with **`
 
 ```powershell
 py pdp.py grab "https://www.etsy.com/listing/4360095387/ghostface-halloween-bling-mask" --name "Bling Ghostface Collection" --headed
+py pdp.py grab "https://www.amazon.com/AYGXU-Halloween-Decorations/dp/B0GYXBWWDB/ref=sr_1_10?keywords=ghost" --name "Swinging Ghost Decor" --headed
 py pdp.py batch --headed
 ```
 
 A real browser window opens; click through the check when it appears (usually once per store) and the grab continues
 by itself, waiting up to `PDP_CHALLENGE_WAIT` seconds (default 180). `PDP_HEADED=1` in `.env` makes every run visible.
 Etsy's thumbnails (`il_794xN`) are upgraded to the full-size `il_fullxfull` files, and the search-result parameters
-Etsy hangs on a link (`ref=`, `ga_`, `sts=`, `logging_key=`) are stripped so the same listing is one product.
+Etsy hangs on a link (`ref=`, `ga_`, `sts=`, `logging_key=`) are stripped so the same listing is one product. An Amazon
+link collapses to `https://www.amazon.com/dp/<ASIN>` (the title slug, `/ref=sr_1_10` and `dib=` are noise), its image
+size codes (`._AC_SL1500_`, `._SS40_`) are stripped so you get the originals, the main image block and thumbnail strip
+count as the gallery, and the "similar items" / sponsored carousels do not.
 
 ## Compressing a whole product folder (the Higgsfield output too)
 

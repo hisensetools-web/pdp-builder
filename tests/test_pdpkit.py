@@ -358,3 +358,35 @@ class MarketplaceTests(unittest.TestCase):
         product = "<html><title>Bling Mask</title><body>" + "<p>lovely</p>" * 100 + "<button>Add to cart</button>captcha-free</body></html>"
         self.assertFalse(scrape.looks_like_bot_check(product))
         self.assertFalse(scrape.looks_like_bot_check("<html><title>Thing</title><body>" + "x" * 70000 + "captcha</body></html>"))
+
+    def test_amazon_size_codes_normalise_to_the_original(self):
+        base = "https://www.amazon.com/dp/B0GYXBWWDB"
+        full = "https://m.media-amazon.com/images/I/71abcDEF+L.jpg"
+        for u in ("https://m.media-amazon.com/images/I/71abcDEF+L._AC_SL1500_.jpg",
+                  "https://m.media-amazon.com/images/I/71abcDEF+L._AC_SX679_.jpg",
+                  "https://m.media-amazon.com/images/I/71abcDEF+L._SS40_.jpg",
+                  "https://m.media-amazon.com/images/I/71abcDEF+L._AC_US40_.jpg", full):
+            self.assertEqual(scrape.normalise_image_url(u, base), full, u)
+        # a non-Amazon path with a dot in the name is left alone
+        self.assertEqual(scrape.normalise_image_url("https://x.com/a/b._c.jpg", base), "https://x.com/a/b._c.jpg")
+
+    def test_amazon_captcha_page_is_a_bot_check(self):
+        page = ("<html><head><title>Amazon.com</title></head><body><h4>Enter the characters you see below</h4>"
+                "<p>Sorry, we just need to make sure you're not a robot.</p></body></html>")
+        self.assertTrue(scrape.looks_like_bot_check(page))
+
+    def test_amazon_gallery_and_furniture(self):
+        html = """<html><body>
+        <div id="imageBlock"><div class="imgTagWrapper"><img src="https://m.media-amazon.com/images/I/71a._AC_SX679_.jpg"></div>
+          <ul id="altImages"><li class="ivThumb"><img src="https://m.media-amazon.com/images/I/81b._SS40_.jpg"></li></ul></div>
+        <img src="https://m.media-amazon.com/images/G/01/x-locale/common/prime-logo.png">
+        <div id="sims-consolidated-1" class="a-carousel"><img src="https://m.media-amazon.com/images/I/99z._AC_UL320_.jpg"></div>
+        <div id="aplus"><img src="https://m.media-amazon.com/images/S/aplus-media/vc/abc.jpg"></div>
+        </body></html>"""
+        refs = scrape.extract_image_refs(html, "https://www.amazon.com/dp/B0GYXBWWDB", None)
+        by_url = {r.url: r.kind for r in refs}
+        self.assertEqual(by_url.get("https://m.media-amazon.com/images/I/71a.jpg"), "gallery")
+        self.assertEqual(by_url.get("https://m.media-amazon.com/images/I/81b.jpg"), "gallery")
+        self.assertEqual(by_url.get("https://m.media-amazon.com/images/I/99z.jpg"), "page")     # similar items, not ours
+        self.assertIn("https://m.media-amazon.com/images/S/aplus-media/vc/abc.jpg", by_url)       # A+ content stays
+        self.assertNotIn("https://m.media-amazon.com/images/G/01/x-locale/common/prime-logo.png", by_url)

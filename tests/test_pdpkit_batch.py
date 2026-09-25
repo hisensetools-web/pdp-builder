@@ -44,6 +44,13 @@ class UrlTests(unittest.TestCase):
              "&organic_search_click=1&logging_key=abc%3Adef&variation0=123")
         self.assertEqual(batch.clean_url(u), "https://www.etsy.com/ie/listing/4360095387/ghostface-halloween-bling-mask?variation0=123")
 
+    def test_amazon_links_collapse_to_the_asin(self):
+        u = ("https://www.amazon.com/AYGXU-Halloween-Decorations-Outdoor-Indoor-5-3ft/dp/B0GYXBWWDB/ref=sr_1_10?dib=eyJ2Ij"
+             "oiMSJ9.abc&dib_tag=se&keywords=halloween+swinging+ghost&qid=1790159961&sr=8-10")
+        self.assertEqual(batch.clean_url(u), "https://www.amazon.com/dp/B0GYXBWWDB")
+        self.assertEqual(batch.clean_url("https://www.amazon.co.uk/gp/product/B0GYXBWWDB?th=1&psc=1"), "https://www.amazon.co.uk/dp/B0GYXBWWDB")
+        self.assertEqual(batch.clean_url("https://amzn.to/abc"), "https://amzn.to/abc")
+
     def test_research_hosts_are_not_store_urls(self):
         for u in ("https://www.pipiads.com/product-search/68e9", "https://vm.tiktok.com/ZN8My63PS/",
                   "https://www.instagram.com/reel/Ddb7/", "https://shop.example.com"):

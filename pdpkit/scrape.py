@@ -38,19 +38,24 @@ SKIP_URL_WORDS = (
     "trustpilot", "klarna", "paypal", "visa", "mastercard", "amex", "applepay", "gpay",
     "loading", "spinner", "placeholder", "blank", "1x1", "tracking", "facebook.com/tr",
     "stamped", "judge.me", "loox", "yotpo", "emoji", "svg",
+    "/images/G/",           # Amazon UI assets (buttons, flags, prime logos); product photos live under /images/I/
 )
 # Shopify CDN size / crop suffixes: name_600x600.jpg, name_1024x.jpg, name_600x600_crop_center.jpg, name@2x.jpg
 _SHOPIFY_SIZE = re.compile(r"_(?:\d+x\d*|x\d+)(?:_crop_[a-z]+)?(?:@\dx)?(?=\.[a-z]{3,4}(?:\?|$))", re.I)
 # Etsy CDN: il_75x75 / il_570xN / il_794xN / il_1588xN thumbnails of the same il_fullxfull original
 _ETSY_SIZE = re.compile(r"il_\d+x(?:N|\d+)\.", re.I)
+# Amazon CDN: m.media-amazon.com/images/I/<id>._AC_SL1500_.jpg, ._SX679_, ._SS40_ ... all crops of <id>.jpg
+_AMAZON_SIZE = re.compile(r"\._[A-Z0-9_,%-]+_(?=\.[a-z]{3,4}$)", re.I)
 # containers whose images are the product's own gallery / scroller
 GALLERY_HINT = re.compile(r"(product[-_ ]?(media|gallery|image|images|photo|photos|slider|carousel)|media[-_ ]?gallery"
                           r"|gallery|carousel|slider|swiper|splide|flickity|glide|keen-slider|thumbnail"
-                          r"|t-slds|t-store__prod|tn-atom|js-product|main[-_ ]?image|photo[-_ ]?main|zoom)", re.I)
+                          r"|t-slds|t-store__prod|tn-atom|js-product|main[-_ ]?image|photo[-_ ]?main|zoom"
+                          r"|image[-_ ]?block|imgTagWrapper|altImages|ivThumb|listing-page-image|image-carousel)", re.I)
 # ... unless they are one of these, which are other products or page furniture
 GALLERY_EXCLUDE = re.compile(r"(related|recommend|upsell|cross[-_ ]?sell|also[-_ ]?(like|bought)|you[-_ ]?may"
                              r"|similar|recently[-_ ]?viewed|complete[-_ ]?the|bundle[-_ ]?with|testimonial|review"
-                             r"|footer|site[-_ ]?header|navigation|announcement|logo|press|badge)", re.I)
+                             r"|footer|site[-_ ]?header|navigation|announcement|logo|press|badge"
+                             r"|sims-|sponsored|p13n|rhf|customers-also|compare)", re.I)
 
 # every attribute a store or page builder may hide the real image behind
 LAZY_ATTRS = ("data-src", "data-original", "data-lazy", "data-zoom", "data-image", "data-large_image", "data-large",
@@ -169,7 +174,8 @@ def browser_available() -> bool:
 
 _BOT_CHECK = re.compile(r"(captcha|just a moment|verify you are (a )?human|are you a human|robot check|access denied"
                         r"|datadome|px-captcha|perimeterx|cf-challenge|challenge-platform|bot detection"
-                        r"|unusual traffic|prove you.re not a robot|Attention Required)", re.I)
+                        r"|unusual traffic|prove you.re not a robot|Attention Required"
+                        r"|enter the characters you see|type the characters you see|api-services-support@amazon)", re.I)
 
 
 def looks_like_bot_check(html: str) -> bool:
@@ -437,6 +443,8 @@ def normalise_image_url(url: str, base: str) -> str:
     path = _SHOPIFY_SIZE.sub("", u.path)
     if "etsystatic.com" in u.netloc:
         path = _ETSY_SIZE.sub("il_fullxfull.", path)     # il_794xN.123.jpg -> il_fullxfull.123.jpg
+    if "/images/I/" in path:
+        path = _AMAZON_SIZE.sub("", path)                # 71abc._AC_SL1500_.jpg -> 71abc.jpg (the original)
     # drop query (v=, width=) except for CDNs that need it; Shopify's ?v= is a cache-buster
     return urlunparse((u.scheme, u.netloc, path, "", "", ""))
 
