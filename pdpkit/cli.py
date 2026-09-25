@@ -262,36 +262,65 @@ def cmd_run(args) -> int:
     return 0
 
 
+def _self_update() -> bool:
+    """`git pull` this checkout so `pdp.py batch` is always the latest tool. True = code changed, restart."""
+    import os
+    import subprocess
+    if not config.AUTO_UPDATE or os.environ.get("PDP_RESTARTED") or not (config.ROOT / ".git").is_dir():
+        return False
+    git = ["git", "-C", str(config.ROOT)]
+    try:
+        before = subprocess.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, timeout=15).stdout.strip()
+        pull = subprocess.run(git + ["pull", "--ff-only", "-q"], capture_output=True, text=True, timeout=90)
+        after = subprocess.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, timeout=15).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as e:  # no git, no network: run with what is here
+        log.debug("self-update skipped: %s", e)
+        return False
+    if pull.returncode:
+        print(f"(could not update the tool: {(pull.stderr or pull.stdout).strip().splitlines()[-1][:120] if (pull.stderr or pull.stdout).strip() else 'git pull failed'}; running the current version)")
+        return False
+    if before and after and before != after:
+        print(f"tool updated ({before[:7]} -> {after[:7]}), restarting")
+        return True
+    return False
+
+
 def cmd_batch(args) -> int:
-    """Run the pipeline over every product URL in a spreadsheet export."""
+    """Run the pipeline over every product in the sheet (or a CSV export)."""
+    import os
+    import subprocess
     from . import batch
-    # a Google Sheets link (on the command line, or PDP_SHEET_URL in .env) is pulled fresh every run,
-    # so a row added to the sheet is picked up without a manual export
-    sheet = args.csv if batch.is_sheet_url(args.csv) else (config.SHEET_URL if args.csv == "products.csv" else "")
-    if sheet:
-        path = Path("products.csv") if batch.is_sheet_url(args.csv) else Path(args.csv)
-        batch.fetch_sheet(sheet, path)
-        print(f"sheet tab downloaded -> {path.name}")
+    if not args.no_update and _self_update():
+        env = dict(os.environ, PDP_RESTARTED="1")
+        return subprocess.call([sys.executable, str(config.ROOT / "pdp.py")] + sys.argv[1:], env=env)
+    # the sheet is the source of truth: pulled fresh on every run (a link on the command line
+    # overrides the built-in one; a CSV path reads that file instead)
+    given = args.csv or ""
+    if given and not batch.is_sheet_url(given):
+        path = Path(given)
+        if not path.is_file():
+            raise SystemExit(f"{path} not found")
+        sheet = ""
     else:
-        path = Path(args.csv)
-    if not path.is_file() and path.name == "products.csv" and config.PRODUCTS_EXAMPLE.exists():
-        path.write_text(config.PRODUCTS_EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"created {path.name} from {config.PRODUCTS_EXAMPLE.name}; edit it or replace it with your own CSV export")
-    if not path.is_file():
-        raise SystemExit(f"{path} not found. In Google Sheets: File > Download > Comma-separated values (.csv), "
-                         "save it in this folder, then pass its name.")
+        sheet = given or config.SHEET_URL
+        if not sheet:
+            raise SystemExit("no sheet configured: set PDP_SHEET_URL in .env or pass the sheet link / a CSV file")
+        config.SHEET_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        path = batch.fetch_sheet(sheet, config.SHEET_CACHE)
+        print(f"sheet tab downloaded ({batch.sheet_export_url(sheet).split('gid=')[-1] if 'gid=' in sheet else 'first tab'})")
     _apply_image_opts(args)
     rows, note = batch.read_rows(path)
-    print(f"{path.resolve()}")
+    if not sheet:
+        print(f"{path.resolve()}")
     print(f"{len(rows)} products ({note}):")
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
     if sheet:
-        print("If this is not the list you expect, check the #gid= in the sheet link points at the right tab.\n")
+        print("(rows come from the live sheet; a product is taken when its Competition cell holds a product link "
+              f"and its {config.STATUS_COLUMN} cell says {config.STATUS_VALUE})\n")
     else:
         print("If this is not the list you expect, re-export the right tab of your sheet over this file "
-              "(a CSV export holds only the tab you are viewing), or put the sheet link in .env as PDP_SHEET_URL "
-              "so batch pulls it fresh every run.\n")
+              "(a CSV export holds only the tab you are viewing).\n")
     from . import images
     images.ensure_bats()      # folders grabbed before compress_images.bat existed get one too (skipped rows included)
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=_images_choice(args),
@@ -299,7 +328,7 @@ def cmd_batch(args) -> int:
                             browser=_browser_choice(args))
     batch.print_summary(results)
     if not args.dry_run:
-        print(f"\nlog: {batch.write_log(results, path.with_name('batch_log.csv'))}")
+        print(f"\nlog: {batch.write_log(results, config.ROOT / 'batch_log.csv')}")
     return 0
 
 
@@ -554,7 +583,7 @@ def build_parser() -> argparse.ArgumentParser:
                                   "(default: the store's product title, which may be in the store's language)")
     s.add_argument("--browser", action="store_true", help="require the headless Chromium render (fail instead of falling back to static HTML)")
     s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
-    s.add_argument("--headed", action="store_true", help="open a visible browser window (Etsy / Amazon show a bot check that you click through)")
+    s.add_argument("--headed", action="store_true", help="every render in a visible window (default: only when a store shows a bot check)")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
     s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos, not the rest of the page")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude rewrite of the summary")
@@ -613,8 +642,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_shopify_check)
 
     s = sub.add_parser("batch", help="grab every product URL in a spreadsheet export (CSV)")
-    s.add_argument("csv", nargs="?", default="products.csv",
-                   help="CSV exported from your sheet (default products.csv), or the Google Sheets link of the tab to pull fresh")
+    s.add_argument("csv", nargs="?", default="",
+                   help="normally nothing: the sheet tab is pulled fresh. Or a Google Sheets link, or a CSV export")
+    s.add_argument("--no-update", action="store_true", help="skip the git pull that keeps the tool current")
     s.add_argument("--guide", action="store_true", help="also write the Fudge guide for each product")
     s.add_argument("--upload", action="store_true", help="also upload each product's generated images to Shopify")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
@@ -623,7 +653,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
     s.add_argument("--browser", action="store_true", help="require the Chromium render for every row (fail rather than fall back)")
     s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
-    s.add_argument("--headed", action="store_true", help="visible browser window for stores with a bot check (Etsy, Amazon)")
+    s.add_argument("--headed", action="store_true", help="every render in a visible window (default: only when a store shows a bot check)")
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
     add_image_opts(s)
     s.set_defaults(func=cmd_batch)

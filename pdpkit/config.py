@@ -101,7 +101,10 @@ PRODUCTS_FILE = Path(os.environ.get("PDP_PRODUCTS_FILE", ROOT / "products.csv"))
 PRODUCTS_EXAMPLE = ROOT / "products.example.csv"
 # The Google Sheet tab to pull instead of a manual CSV export (the link from your address bar, with #gid=...).
 # The sheet must be shared "Anyone with the link: Viewer".
-SHEET_URL = os.environ.get("PDP_SHEET_URL", "").strip()
+DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1O35L85zhY_5WMnsG8gEKN0bKx7oziTUMlbn6r3TJ1J0/edit?gid=395636284#gid=395636284"
+SHEET_URL = os.environ.get("PDP_SHEET_URL", DEFAULT_SHEET_URL).strip()     # empty = read a local CSV instead
+SHEET_CACHE = ROOT / "data" / "sheet.csv"                                   # where the downloaded tab is kept
+AUTO_UPDATE = os.environ.get("PDP_AUTO_UPDATE", "1").strip() not in ("0", "false", "no")   # `batch` runs git pull first
 # Only sheet rows whose STATUS_COLUMN cell equals STATUS_VALUE are grabbed (case-insensitive); empty column name = no filter
 STATUS_COLUMN = os.environ.get("PDP_STATUS_COLUMN", "LP Status").strip()
 STATUS_VALUE = os.environ.get("PDP_STATUS_VALUE", "Pending").strip()
@@ -111,7 +114,11 @@ BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # repla
 BRAND_SUFFIX = os.environ.get("BRAND_SUFFIX", "").strip()               # optional, e.g. "by SoleneLife" instead of a prefix
 GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "1").strip() not in ("0", "false", "no")   # default: every image on the page
 USE_BROWSER = os.environ.get("PDP_BROWSER", "auto").strip().lower()      # auto = render every page when Playwright is installed; never = static only
-HEADED = os.environ.get("PDP_HEADED", "").strip().lower() in ("1", "true", "yes")   # visible browser window (Etsy / Amazon bot checks)
+# auto = headless, and a visible window only when a store answers with a bot check (Etsy, Amazon);
+# always = every render visible; never = headless only
+HEADED_MODE = {"1": "always", "true": "always", "yes": "always", "0": "never", "false": "never", "no": "never"}.get(
+    os.environ.get("PDP_HEADED", "auto").strip().lower(), os.environ.get("PDP_HEADED", "auto").strip().lower())
+HEADED = HEADED_MODE == "always"
 CHALLENGE_WAIT_S = int(os.environ.get("PDP_CHALLENGE_WAIT", "180"))                # how long to wait for you to click through a bot check
 
 # --- Pricing (same on every product): one-time three-tier bundle, tier 2 pre-selected ------------

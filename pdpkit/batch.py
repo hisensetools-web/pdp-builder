@@ -147,7 +147,8 @@ def fetch_sheet(url: str, dest: Path, session=None) -> Path:
     try:
         r = session.get(export, timeout=(10, 60), allow_redirects=True)
     except requests.RequestException as e:
-        raise SystemExit(f"could not download the sheet: {short_error(e)}") from e
+        raise SystemExit(f"could not download the sheet: {short_error(e).replace(' from the store', ' from Google')}. "
+                         "Check the laptop is online; to run without the sheet: py pdp.py batch products.csv") from e
     body = r.content
     head = body[:400].lstrip().lower()
     if r.status_code in (401, 403) or head.startswith(b"<!doctype") or head.startswith(b"<html") \

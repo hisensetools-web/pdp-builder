@@ -86,92 +86,37 @@ Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `u
 ## The short version
 
 ```powershell
-git pull
-python pdp.py batch          # every product in products.csv -> one folder each, images compressed
+cd C:\Users\top2\Desktop\tt
+py pdp.py batch
 ```
 
-One folder per product under `pdp_output/`, named from your sheet, holding **every image on the competitor's
-page** (compressed, no duplicates, product scroller first as `gallery_NN`, the rest as `page_NN`) plus
-`product_summary.md` with the page's facts. Nothing is re-downloaded on a second run. What you do with the folder
-afterwards is manual: Higgsfield, then Shopify.
+That is the whole daily routine. `batch`:
 
-## A whole spreadsheet at once
+1. updates itself (`git pull`), restarting if the tool changed;
+2. downloads the **Main TikTok Prods V2** tab of *Product Research TT 2.0* straight from Google Sheets (no export,
+   no local file; the link is built in, `PDP_SHEET_URL` in `.env` points it elsewhere);
+3. takes every row whose **LP Status** says **Pending** and whose Competition cell holds a product link (all the
+   links in the cell; research links like TikTok / pipiads are ignored);
+4. grabs every image on each page into `pdp_output\<product name>\competitor_imgs\`, compressed, no duplicates,
+   with a `compress_images.bat` beside it for the Higgsfield output later;
+5. skips products it already has, and only fetches links that are new to a row;
+6. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
+   carries on by itself.
 
-The easiest way: share the sheet as **Anyone with the link (Viewer)**, open the tab you want, copy the address bar
-(it ends in `#gid=...`, which is the tab) and put it in `.env`:
+Every row's outcome is printed and written to `batch_log.csv`. Nothing you do with the folder afterwards
+(Higgsfield, Shopify) touches the tool.
 
-```
-PDP_SHEET_URL=https://docs.google.com/spreadsheets/d/1O35.../edit?gid=395636284#gid=395636284
-```
-
-`python pdp.py batch` then downloads that tab fresh on every run, so a row added to the sheet is picked up next
-time without exporting anything. The same link works once on the command line: `python pdp.py batch "<link>"`.
-
-Only rows whose **LP Status** cell says **Pending** are grabbed (the column is found by its header; a sheet without
-one is not filtered; `PDP_STATUS_COLUMN` / `PDP_STATUS_VALUE` in `.env` change the rule). A cell holding two or
-more product links (two colours, two stores) puts all of them into the same product folder, numbered on from the
-first, with repeated photos saved once; a link added to a row later is fetched into the existing folder on the
-next run.
-
-Otherwise, the manual export: Open the tab you want (a CSV export contains **only the tab you are looking at**, which is how you pick one sheet out
-of a workbook), then **File > Download > Comma-separated values**, save it in this folder as `products.csv`, and run:
-
-```bash
-python pdp.py batch                 # grab every product in the sheet
-python pdp.py batch --guide         # ... and write each one's Fudge guide
-python pdp.py batch --limit 3       # try the first three first
-python pdp.py batch --dry-run       # list what it would grab, fetch nothing
-python pdp.py batch mysheet.csv     # any other CSV
-```
-
-No column setup needed: the URL column is found by looking at the values, so research links (pipiads, TikTok,
-Instagram, Google) are ignored and the product link is used, with tracking parameters stripped. Marketplace links
-(Amazon, Etsy, AliExpress) count as product pages, since a sheet often cites them as the source. A store that blocks
-plain requests is retried once in headless Chromium without the plain fetch; `--no-browser` skips rendering. Rows that
-repeat a product with a blank name inherit it, duplicates are dropped, and a store that blocks us or 404s is logged and
-the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
-`batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
-
-## Etsy, Amazon and other stores with a bot check
-
-Marketplaces answer a script, and usually a headless browser too, with a "verify you are human" page instead of the
-listing. The run says so (`the store showed a bot check`). Run it again with **`--headed`**:
+Occasionally useful:
 
 ```powershell
-py pdp.py grab "https://www.etsy.com/listing/4360095387/ghostface-halloween-bling-mask" --name "Bling Ghostface Collection" --headed
-py pdp.py grab "https://www.amazon.com/AYGXU-Halloween-Decorations/dp/B0GYXBWWDB/ref=sr_1_10?keywords=ghost" --name "Swinging Ghost Decor" --headed
-py pdp.py batch --headed
+py pdp.py batch --dry-run          # show the rows it would take, fetch nothing
+py pdp.py batch --redo             # grab everything again
+py pdp.py batch --limit 2          # first two rows only
+py pdp.py batch mysheet.csv        # a CSV export instead of the live sheet
+py pdp.py grab <url> --name "X"    # one page that is not in the sheet
+py pdp.py compress                 # compress every product folder (or double-click the .bat in one)
+py pdp.py list                     # what has been grabbed
 ```
-
-A real browser window opens; click through the check when it appears (usually once per store) and the grab continues
-by itself, waiting up to `PDP_CHALLENGE_WAIT` seconds (default 180). `PDP_HEADED=1` in `.env` makes every run visible.
-Etsy's thumbnails (`il_794xN`) are upgraded to the full-size `il_fullxfull` files, and the search-result parameters
-Etsy hangs on a link (`ref=`, `ga_`, `sts=`, `logging_key=`) are stripped so the same listing is one product. An Amazon
-link collapses to `https://www.amazon.com/dp/<ASIN>` (the title slug, `/ref=sr_1_10` and `dib=` are noise), its image
-size codes (`._AC_SL1500_`, `._SS40_`) are stripped so you get the originals, the main image block and thumbnail strip
-count as the gallery, and the "similar items" / sponsored carousels do not.
-
-## Compressing a whole product folder (the Higgsfield output too)
-
-Every product folder gets a **`compress_images.bat`**. Paste the images Higgsfield produced anywhere in that folder
-(the `<name>_shopify_PDP_imgs/` folder, or straight in), double-click the .bat, and every image under the folder,
-competitor photos included, is written to **`compressed/`** as light WebP: longest side 2000 px, quality 75, which
-turns a 14 MB PNG into ~250 KB. Nothing is deleted; the originals stay where they were. Run it again after adding
-more images and only the new ones are processed.
-
-The same thing from a terminal, with the knobs:
-
-```powershell
-python pdp.py compress "pdp_output\sol-study-light"       # or just:  python pdp.py compress sol-study-light
-python pdp.py compress sol-study-light --format jpeg --quality 70 --max-px 1600
-python pdp.py compress sol-study-light --in-place        # replace the files instead of writing compressed/
-python pdp.py compress sol-study-light --redo            # recompress files done on an earlier run
-```
-
-`python pdp.py compress` with no folder does every product folder. Folders grabbed before the .bat existed get one the next time you run `batch`, `list` or `compress`.
-
-The .bat accepts the same flags (`compress_images.bat --format jpeg`). Defaults live in `.env`: `PDP_HEAVY_FORMAT`,
-`PDP_HEAVY_QUALITY`, `PDP_HEAVY_MAX_PX`. A file that would not get smaller is copied as it is.
 
 ## Finding the product's own photos
 

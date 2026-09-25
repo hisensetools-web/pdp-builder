@@ -283,8 +283,11 @@ def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tu
         if looks_like_bot_check(_content(page)):
             if not headed:
                 browser.close()
-                raise RuntimeError("the store answered with a bot check instead of the page; "
-                                   "run again with --headed and click through it in the window that opens")
+                if config.HEADED_MODE == "never":
+                    raise RuntimeError("the store answered with a bot check instead of the page; "
+                                       "run again with --headed and click through it in the window that opens")
+                print("    the store answered with a bot check; opening a browser window for you to click through it", flush=True)
+                return render_page(url, wait_ms, headed=True)
             print(f"    the store is showing a bot check: solve it in the browser window "
                   f"(waiting up to {config.CHALLENGE_WAIT_S}s) ...", flush=True)
             waited = 0

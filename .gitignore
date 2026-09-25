@@ -2,7 +2,7 @@ __pycache__/
 *.pyc
 .env
 pdp_output/
-data/shopify_token.json
+data/
 .pytest_cache/
 prompts.txt
 templates/*.pdf
