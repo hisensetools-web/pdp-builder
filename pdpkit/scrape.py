@@ -41,6 +41,8 @@ SKIP_URL_WORDS = (
 )
 # Shopify CDN size / crop suffixes: name_600x600.jpg, name_1024x.jpg, name_600x600_crop_center.jpg, name@2x.jpg
 _SHOPIFY_SIZE = re.compile(r"_(?:\d+x\d*|x\d+)(?:_crop_[a-z]+)?(?:@\dx)?(?=\.[a-z]{3,4}(?:\?|$))", re.I)
+# Etsy CDN: il_75x75 / il_570xN / il_794xN / il_1588xN thumbnails of the same il_fullxfull original
+_ETSY_SIZE = re.compile(r"il_\d+x(?:N|\d+)\.", re.I)
 # containers whose images are the product's own gallery / scroller
 GALLERY_HINT = re.compile(r"(product[-_ ]?(media|gallery|image|images|photo|photos|slider|carousel)|media[-_ ]?gallery"
                           r"|gallery|carousel|slider|swiper|splide|flickity|glide|keen-slider|thumbnail"
@@ -110,6 +112,10 @@ def short_error(e: Exception) -> str:
     """The part of a network traceback worth reading: 'connection refused', 'HTTP 403', a timeout."""
     text = " ".join(str(e).split())
     for pattern, msg in (("Connection refused", "connection refused (store unreachable)"),
+                         ("ERR_CONNECTION_REFUSED", "connection refused (store unreachable)"),
+                         ("ERR_NAME_NOT_RESOLVED", "domain does not resolve"),
+                         ("ERR_CONNECTION_TIMED_OUT", "timed out"),
+                         ("bot check", "the store showed a bot check (run again with --headed and click through it)"),
                          ("Name or service not known", "domain does not resolve"),
                          ("getaddrinfo failed", "domain does not resolve"),
                          ("NameResolutionError", "domain does not resolve"),
@@ -161,10 +167,33 @@ def browser_available() -> bool:
     return True
 
 
-def render_page(url: str, wait_ms: int = 4000) -> tuple[str, dict[str, bytes]]:
-    """Open the page in headless Chromium, scroll it, wake every lazy image and carousel, and
-    return the rendered HTML plus the bytes of every image the browser actually loaded, keyed
-    by normalised URL (largest variant kept). Whatever the visitor sees, we have."""
+_BOT_CHECK = re.compile(r"(captcha|just a moment|verify you are (a )?human|are you a human|robot check|access denied"
+                        r"|datadome|px-captcha|perimeterx|cf-challenge|challenge-platform|bot detection"
+                        r"|unusual traffic|prove you.re not a robot|Attention Required)", re.I)
+
+
+def looks_like_bot_check(html: str) -> bool:
+    """Etsy, Amazon and Cloudflare-fronted stores answer a script with a challenge page instead of
+    the product. Short page + challenge words = not the product page."""
+    if not html:
+        return True
+    head = html[:20000]
+    title = re.search(r"<title[^>]*>(.*?)</title>", head, re.I | re.S)
+    if title and _BOT_CHECK.search(title.group(1)):
+        return True
+    return len(html) < 60000 and bool(_BOT_CHECK.search(head)) and "add to cart" not in html.lower()
+
+
+def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tuple[str, dict[str, bytes]]:
+    """Open the page in Chromium, scroll it, wake every lazy image and carousel, and return the
+    rendered HTML plus the bytes of every image the browser actually loaded, keyed by normalised
+    URL (largest variant kept). Whatever the visitor sees, we have.
+
+    headed=True (PDP_HEADED=1 / --headed) opens a visible window instead: marketplaces such as
+    Etsy and Amazon answer a headless browser with a bot check, and a visible one you can click
+    through is the one reliable way past it. The run waits up to CHALLENGE_WAIT_S for the check
+    to clear."""
+    headed = config.HEADED if headed is None else headed
     try:
         from playwright.sync_api import sync_playwright  # imported lazily: optional dependency at runtime
     except ImportError as e:
@@ -191,7 +220,7 @@ def render_page(url: str, wait_ms: int = 4000) -> tuple[str, dict[str, bytes]]:
             pass
 
     with sync_playwright() as p:
-        kw = {"headless": True}
+        kw = {"headless": not headed, "args": ["--disable-blink-features=AutomationControlled"]}
         if config.CHROMIUM_PATH:
             kw["executable_path"] = config.CHROMIUM_PATH
         try:
@@ -199,10 +228,29 @@ def render_page(url: str, wait_ms: int = 4000) -> tuple[str, dict[str, bytes]]:
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(f"cannot start Chromium ({str(e).splitlines()[0][:120]}); "
                                "run: python -m playwright install chromium") from e
-        page = browser.new_page(user_agent=config.USER_AGENT, viewport={"width": 1366, "height": 900})
+        context = browser.new_context(user_agent=config.USER_AGENT, viewport={"width": 1366, "height": 900},
+                                      locale="en-US")
+        # a plain visitor's browser does not announce itself as automated
+        context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page = context.new_page()
         page.on("response", on_response)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         page.wait_for_timeout(wait_ms)
+        if looks_like_bot_check(page.content()):
+            if not headed:
+                browser.close()
+                raise RuntimeError("the store answered with a bot check instead of the page; "
+                                   "run again with --headed and click through it in the window that opens")
+            print(f"    the store is showing a bot check: solve it in the browser window "
+                  f"(waiting up to {config.CHALLENGE_WAIT_S}s) ...", flush=True)
+            waited = 0
+            while waited < config.CHALLENGE_WAIT_S and looks_like_bot_check(page.content()):
+                page.wait_for_timeout(2000)
+                waited += 2
+            if looks_like_bot_check(page.content()):
+                browser.close()
+                raise RuntimeError("the bot check was not cleared in time")
+            page.wait_for_timeout(wait_ms)
         height = page.evaluate("document.body.scrollHeight")
         y = 0
         while y < height and y < 40000:
@@ -243,9 +291,9 @@ def render_page(url: str, wait_ms: int = 4000) -> tuple[str, dict[str, bytes]]:
     return html, captured
 
 
-def render_html(url: str, wait_ms: int = 4000) -> str:
+def render_html(url: str, wait_ms: int = 4000, headed: bool | None = None) -> str:
     """Rendered HTML only (kept for callers that do not need the captured images)."""
-    return render_page(url, wait_ms)[0]
+    return render_page(url, wait_ms, headed=headed)[0]
 
 
 # --------------------------------------------------------------------------- shopify json
@@ -387,6 +435,8 @@ def normalise_image_url(url: str, base: str) -> str:
     url = urljoin(base, url)
     u = urlparse(url)
     path = _SHOPIFY_SIZE.sub("", u.path)
+    if "etsystatic.com" in u.netloc:
+        path = _ETSY_SIZE.sub("il_fullxfull.", path)     # il_794xN.123.jpg -> il_fullxfull.123.jpg
     # drop query (v=, width=) except for CDNs that need it; Shopify's ?v= is a cache-buster
     return urlunparse((u.scheme, u.netloc, path, "", "", ""))
 
@@ -773,6 +823,8 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     all_images = config.GRAB_ALL_IMAGES if all_images is None else all_images
     session = session or make_session()
     html = fetch_html(session, url)
+    if looks_like_bot_check(html):
+        raise RuntimeError("HTTP 403 from the store (bot check)")
     product_json = fetch_shopify_product(session, url)
     discovered = None
     if product_json is None:

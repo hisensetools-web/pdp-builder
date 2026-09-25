@@ -105,6 +105,8 @@ BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # repla
 BRAND_SUFFIX = os.environ.get("BRAND_SUFFIX", "").strip()               # optional, e.g. "by SoleneLife" instead of a prefix
 GRAB_ALL_IMAGES = os.environ.get("PDP_GRAB_ALL_IMAGES", "1").strip() not in ("0", "false", "no")   # default: every image on the page
 USE_BROWSER = os.environ.get("PDP_BROWSER", "auto").strip().lower()      # auto = render every page when Playwright is installed; never = static only
+HEADED = os.environ.get("PDP_HEADED", "").strip().lower() in ("1", "true", "yes")   # visible browser window (Etsy / Amazon bot checks)
+CHALLENGE_WAIT_S = int(os.environ.get("PDP_CHALLENGE_WAIT", "180"))                # how long to wait for you to click through a bot check
 
 # --- Pricing (same on every product): one-time three-tier bundle, tier 2 pre-selected ------------
 # Override with PDP_PRICING as JSON: [{"name": "...", "price": 39.95, "compare_at": 79.90}, ...]

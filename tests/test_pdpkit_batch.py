@@ -38,6 +38,12 @@ class UrlTests(unittest.TestCase):
         self.assertEqual(batch.clean_url("https://s.com/products/x?_pos=3&_sid=ab&_ss=r"), "https://s.com/products/x")
         self.assertEqual(batch.clean_url("https://s.com/products/x#reviews)."), "https://s.com/products/x")
 
+    def test_etsy_search_result_junk_is_stripped(self):
+        u = ("https://www.etsy.com/ie/listing/4360095387/ghostface-halloween-bling-mask?ls=s&ga_order=most_relevant"
+             "&ga_search_type=all&ref=sr_gallery-1-2&sr_prefetch=1&pf_from=search&sts=1&content_source=abc%253Adef"
+             "&organic_search_click=1&logging_key=abc%3Adef&variation0=123")
+        self.assertEqual(batch.clean_url(u), "https://www.etsy.com/ie/listing/4360095387/ghostface-halloween-bling-mask?variation0=123")
+
     def test_research_hosts_are_not_store_urls(self):
         for u in ("https://www.pipiads.com/product-search/68e9", "https://vm.tiktok.com/ZN8My63PS/",
                   "https://www.instagram.com/reel/Ddb7/", "https://shop.example.com"):

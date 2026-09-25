@@ -91,6 +91,8 @@ def _prompts(args, product_dir: Path | None = None) -> list[str]:
 
 def _apply_image_opts(args) -> None:
     """Per-run overrides of the compression settings in .env."""
+    if getattr(args, "headed", False):
+        config.HEADED = True
     if getattr(args, "no_compress", False) or getattr(args, "originals_only", False):
         config.COMPRESS_IMAGES = False
     if getattr(args, "keep_originals", False):
@@ -140,16 +142,27 @@ def cmd_grab(args) -> int:
                          "the address bar, e.g. https://tykapryde.com/products/sol-study-light")
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
+    from .batch import clean_url
+    args.url = clean_url(args.url)          # tracking / search-result parameters off, ?variant= kept
+    out_dir = config.product_dir(config.slugify(args.name)) if getattr(args, "name", None) else None
+    browser = _browser_choice(args)
     try:
-        out_dir = config.product_dir(config.slugify(args.name)) if getattr(args, "name", None) else None
-        data, out_dir, manifest = scrape.grab(args.url, out_dir=out_dir, use_browser=_browser_choice(args),
-                                              all_images=_images_choice(args))
+        try:
+            data, out_dir, manifest = scrape.grab(args.url, out_dir=out_dir, use_browser=browser, all_images=_images_choice(args))
+        except Exception as first:  # noqa: BLE001 - a store that refuses plain requests (Etsy, Amazon) may still render
+            if browser is False or "404" in str(first):
+                raise
+            print(f"{scrape.short_error(first)}; retrying with the browser only")
+            data, out_dir, manifest = scrape.grab_via_browser(args.url, out_dir=out_dir, all_images=_images_choice(args))
     except Exception as e:  # noqa: BLE001 - one clear line beats a traceback
-        from . import scrape as _s
-        hint = ("The page does not exist: open it in your browser and copy the address bar."
-                if "404" in str(e) else
-                "Check the URL opens in your browser; if the store blocks scripts, retry with --browser.")
-        raise SystemExit(f"could not fetch {args.url}: {_s.short_error(e)}\n{hint}") from e
+        msg = str(e)
+        if "404" in msg:
+            hint = "The page does not exist: open it in your browser and copy the address bar."
+        elif "bot check" in msg:
+            hint = "Run it again with --headed: a browser window opens, click through the check, and the grab continues."
+        else:
+            hint = "Check the URL opens in your browser; if the store blocks scripts, retry with --headed."
+        raise SystemExit(f"could not fetch {args.url}: {msg if 'bot check' in msg else scrape.short_error(e)}\n{hint}") from e
     md = summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
     from urllib.parse import urlparse
     print(f"product : {data.title}")
@@ -527,6 +540,7 @@ def build_parser() -> argparse.ArgumentParser:
                                   "(default: the store's product title, which may be in the store's language)")
     s.add_argument("--browser", action="store_true", help="require the headless Chromium render (fail instead of falling back to static HTML)")
     s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
+    s.add_argument("--headed", action="store_true", help="open a visible browser window (Etsy / Amazon show a bot check that you click through)")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
     s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos, not the rest of the page")
     s.add_argument("--no-claude", action="store_true", help="skip the Claude rewrite of the summary")
@@ -557,6 +571,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--name")
     s.add_argument("--browser", action="store_true")
     s.add_argument("--no-browser", action="store_true")
+    s.add_argument("--headed", action="store_true", help="visible browser window for stores with a bot check")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)
     s.add_argument("--gallery-only", action="store_true")
     s.add_argument("--no-claude", action="store_true")
@@ -593,6 +608,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--redo", action="store_true", help="grab again even if the product was grabbed before")
     s.add_argument("--browser", action="store_true", help="require the Chromium render for every row (fail rather than fall back)")
     s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
+    s.add_argument("--headed", action="store_true", help="visible browser window for stores with a bot check (Etsy, Amazon)")
     s.add_argument("--dry-run", action="store_true", help="list what would be grabbed, fetch nothing")
     add_image_opts(s)
     s.set_defaults(func=cmd_batch)

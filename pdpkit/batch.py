@@ -29,7 +29,10 @@ log = logging.getLogger("pdpkit.batch")
 URL_RE = re.compile(r"https?://[^\s,]+", re.I)
 NAME_HEADERS = ("product name", "product", "name", "title", "item")
 # tracking parameters that make one product URL look like ten
-TRACKING_PREFIXES = ("utm_", "ttclid", "fbclid", "gclid", "gad_", "msclkid", "epik", "irclickid", "_pos", "_sid", "_ss")
+TRACKING_PREFIXES = ("utm_", "ttclid", "fbclid", "gclid", "gad_", "msclkid", "epik", "irclickid", "_pos", "_sid", "_ss",
+                     # Etsy search-result junk: ?ls=s&ga_order=...&ref=sr_gallery-1-2&sr_prefetch=1&content_source=...
+                     "ga_", "ref", "sr_prefetch", "pf_from", "sts", "content_source", "organic_search_click", "logging_key",
+                     "ls", "click_key", "click_sum", "frs", "plkey", "pro", "sca_ref", "th", "psc", "keywords", "qid", "sr", "sprefix")
 # Research and social sources, never the product page we want. Marketplaces (Amazon, Etsy,
 # AliExpress) are NOT here: a sheet often cites them as the product's source, and their pages
 # carry the images we are after.

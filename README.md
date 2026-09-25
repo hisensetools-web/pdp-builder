@@ -116,6 +116,21 @@ repeat a product with a blank name inherit it, duplicates are dropped, and a sto
 the run carries on. Products already grabbed are skipped unless you pass `--redo`. Every row's outcome lands in
 `batch_log.csv`. `products.example.csv` is the starter list; `products.csv` is yours and is not tracked by git.
 
+## Etsy, Amazon and other stores with a bot check
+
+Marketplaces answer a script, and usually a headless browser too, with a "verify you are human" page instead of the
+listing. The run says so (`the store showed a bot check`). Run it again with **`--headed`**:
+
+```powershell
+py pdp.py grab "https://www.etsy.com/listing/4360095387/ghostface-halloween-bling-mask" --name "Bling Ghostface Collection" --headed
+py pdp.py batch --headed
+```
+
+A real browser window opens; click through the check when it appears (usually once per store) and the grab continues
+by itself, waiting up to `PDP_CHALLENGE_WAIT` seconds (default 180). `PDP_HEADED=1` in `.env` makes every run visible.
+Etsy's thumbnails (`il_794xN`) are upgraded to the full-size `il_fullxfull` files, and the search-result parameters
+Etsy hangs on a link (`ref=`, `ga_`, `sts=`, `logging_key=`) are stripped so the same listing is one product.
+
 ## Compressing a whole product folder (the Higgsfield output too)
 
 Every product folder gets a **`compress_images.bat`**. Paste the images Higgsfield produced anywhere in that folder

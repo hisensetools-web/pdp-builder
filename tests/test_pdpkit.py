@@ -338,3 +338,23 @@ class HiggsfieldTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MarketplaceTests(unittest.TestCase):
+    def test_etsy_thumbnails_normalise_to_the_full_size_file(self):
+        base = "https://www.etsy.com/listing/1/x"
+        full = "https://i.etsystatic.com/123/r/il/abc/456/il_fullxfull.456_def.jpg"
+        for u in ("https://i.etsystatic.com/123/r/il/abc/456/il_794xN.456_def.jpg",
+                  "https://i.etsystatic.com/123/r/il/abc/456/il_75x75.456_def.jpg",
+                  "https://i.etsystatic.com/123/r/il/abc/456/il_1588xN.456_def.jpg?version=0", full):
+            self.assertEqual(scrape.normalise_image_url(u, base), full)
+        self.assertEqual(scrape.normalise_image_url("https://x.com/a/il_794xN.1.jpg", base), "https://x.com/a/il_794xN.1.jpg")
+
+    def test_bot_check_pages_are_recognised(self):
+        self.assertTrue(scrape.looks_like_bot_check("<html><head><title>Just a moment...</title></head><body></body></html>"))
+        self.assertTrue(scrape.looks_like_bot_check("<html><title>Access Denied</title><p>Reference #18.2</p></html>"))
+        self.assertTrue(scrape.looks_like_bot_check("<html><title>Etsy</title><script src='https://ct.captcha-delivery.com/c.js'></script>DataDome</html>"))
+        self.assertTrue(scrape.looks_like_bot_check(""))
+        product = "<html><title>Bling Mask</title><body>" + "<p>lovely</p>" * 100 + "<button>Add to cart</button>captcha-free</body></html>"
+        self.assertFalse(scrape.looks_like_bot_check(product))
+        self.assertFalse(scrape.looks_like_bot_check("<html><title>Thing</title><body>" + "x" * 70000 + "captcha</body></html>"))
