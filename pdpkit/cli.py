@@ -141,7 +141,9 @@ def cmd_grab(args) -> int:
     if not args.url.startswith(("http://", "https://")):
         args.url = "https://" + args.url
     try:
-        data, out_dir, manifest = scrape.grab(args.url, use_browser=_browser_choice(args), all_images=_images_choice(args))
+        out_dir = config.product_dir(config.slugify(args.name)) if getattr(args, "name", None) else None
+        data, out_dir, manifest = scrape.grab(args.url, out_dir=out_dir, use_browser=_browser_choice(args),
+                                              all_images=_images_choice(args))
     except Exception as e:  # noqa: BLE001 - one clear line beats a traceback
         from . import scrape as _s
         hint = ("The page does not exist: open it in your browser and copy the address bar."
@@ -521,6 +523,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("grab", help="download every image on a competitor PDP + write product_summary")
     s.add_argument("url")
+    s.add_argument("--name", help='folder name to use, e.g. --name "Sol Study Light" -> pdp_output/sol-study-light '
+                                  "(default: the store's product title, which may be in the store's language)")
     s.add_argument("--browser", action="store_true", help="require the headless Chromium render (fail instead of falling back to static HTML)")
     s.add_argument("--no-browser", action="store_true", help="static HTML only, no Chromium render")
     s.add_argument("--all-images", action="store_true", help=argparse.SUPPRESS)   # the default now
