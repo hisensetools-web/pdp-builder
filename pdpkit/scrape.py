@@ -190,6 +190,39 @@ def looks_like_bot_check(html: str) -> bool:
     return len(html) < 60000 and bool(_BOT_CHECK.search(head)) and "add to cart" not in html.lower()
 
 
+_NAVIGATING = ("navigating", "Execution context was destroyed", "context was destroyed", "Target closed",
+               "Cannot find context", "detached")
+
+
+def _settled(call, page, tries: int = 15, default=None):
+    """Run a page call, riding out a navigation: a bot check or a locale redirect reloads the page a
+    few times, and Playwright refuses to read a page that is mid-navigation. Retries for ~tries s;
+    returns default if it never settles (only content() has no sensible default)."""
+    last = None
+    for _ in range(tries):
+        try:
+            return call()
+        except Exception as e:  # noqa: BLE001
+            if not any(m in str(e) for m in _NAVIGATING):
+                raise
+            last = e
+            try:
+                page.wait_for_timeout(1000)
+            except Exception:  # noqa: BLE001
+                pass
+    if default is not None:
+        return default
+    raise RuntimeError(f"the page kept reloading and never settled ({str(last).splitlines()[0][:80]})")
+
+
+def _content(page) -> str:
+    return _settled(page.content, page)
+
+
+def _eval(page, js: str, default=None):
+    return _settled(lambda: page.evaluate(js), page, default=default)
+
+
 def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tuple[str, dict[str, bytes]]:
     """Open the page in Chromium, scroll it, wake every lazy image and carousel, and return the
     rendered HTML plus the bytes of every image the browser actually loaded, keyed by normalised
@@ -241,8 +274,12 @@ def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tu
         page = context.new_page()
         page.on("response", on_response)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        try:
+            page.wait_for_load_state("load", timeout=20000)
+        except Exception:  # noqa: BLE001 - a page that never fires load still renders
+            pass
         page.wait_for_timeout(wait_ms)
-        if looks_like_bot_check(page.content()):
+        if looks_like_bot_check(_content(page)):
             if not headed:
                 browser.close()
                 raise RuntimeError("the store answered with a bot check instead of the page; "
@@ -250,23 +287,23 @@ def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tu
             print(f"    the store is showing a bot check: solve it in the browser window "
                   f"(waiting up to {config.CHALLENGE_WAIT_S}s) ...", flush=True)
             waited = 0
-            while waited < config.CHALLENGE_WAIT_S and looks_like_bot_check(page.content()):
+            while waited < config.CHALLENGE_WAIT_S and looks_like_bot_check(_settled(page.content, page, default="")):
                 page.wait_for_timeout(2000)
                 waited += 2
-            if looks_like_bot_check(page.content()):
+            if looks_like_bot_check(_content(page)):
                 browser.close()
                 raise RuntimeError("the bot check was not cleared in time")
             page.wait_for_timeout(wait_ms)
-        height = page.evaluate("document.body.scrollHeight")
+        height = _eval(page, "document.body.scrollHeight", default=0)
         y = 0
         while y < height and y < 40000:
             y += 700
-            page.evaluate(f"window.scrollTo(0, {y})")
+            _eval(page, f"window.scrollTo(0, {y})", default=0)
             page.wait_for_timeout(300)
-            height = page.evaluate("document.body.scrollHeight")
+            height = _eval(page, "document.body.scrollHeight", default=0)
         # carousels only render the visible slide: force every lazy image to load, then walk each
         # horizontal strip slide by slide (some sliders only fetch the slide that becomes active)
-        page.evaluate("""() => {
+        _eval(page, """() => {
             document.querySelectorAll('img').forEach(i => {
                 i.loading = 'eager';
                 for (const a of ['data-src','data-original','data-lazy','data-large_image','data-full']) {
@@ -280,19 +317,19 @@ def render_page(url: str, wait_ms: int = 4000, headed: bool | None = None) -> tu
             });
         }""")
         page.wait_for_timeout(1500)
-        strips = page.evaluate("() => [...document.querySelectorAll('*')].filter(el => el.scrollWidth > el.clientWidth + 40).length")
+        strips = _eval(page, "() => [...document.querySelectorAll('*')].filter(el => el.scrollWidth > el.clientWidth + 40).length", default=0)
         for step in range(1, 13):                       # up to 12 slides per strip
-            page.evaluate(f"() => document.querySelectorAll('*').forEach(el => {{ if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = el.clientWidth * {step}; }})")
+            _eval(page, f"() => document.querySelectorAll('*').forEach(el => {{ if (el.scrollWidth > el.clientWidth + 40) el.scrollLeft = el.clientWidth * {step}; }})", default=0)
             page.wait_for_timeout(400 if strips else 50)
         # click through any "next slide" buttons too, for sliders that ignore scrollLeft
-        page.evaluate("""() => {
+        _eval(page, """() => {
             const sel = '[class*="next"],[aria-label*="next" i],[class*="arrow-right"],[class*="slick-next"],[class*="swiper-button-next"],[class*="t-slds__arrow_right"]';
             for (let k = 0; k < 12; k++) document.querySelectorAll(sel).forEach(b => { try { b.click(); } catch (e) {} });
         }""")
         page.wait_for_timeout(2000)
-        page.evaluate("window.scrollTo(0, 0)")
+        _eval(page, "window.scrollTo(0, 0)", default=0)
         page.wait_for_timeout(500)
-        html = page.content()
+        html = _content(page)
         browser.close()
     return html, captured
 

@@ -390,3 +390,30 @@ class MarketplaceTests(unittest.TestCase):
         self.assertEqual(by_url.get("https://m.media-amazon.com/images/I/99z.jpg"), "page")     # similar items, not ours
         self.assertIn("https://m.media-amazon.com/images/S/aplus-media/vc/abc.jpg", by_url)       # A+ content stays
         self.assertNotIn("https://m.media-amazon.com/images/G/01/x-locale/common/prime-logo.png", by_url)
+
+
+class NavigationRetryTests(unittest.TestCase):
+    """Etsy's bot check reloads the page mid-read: 'Unable to retrieve content because the page is navigating'."""
+
+    def test_content_read_waits_out_a_navigation(self):
+        page = mock.Mock()
+        page.content.side_effect = [Exception("Page.content: Unable to retrieve content because the page is navigating and changing the content."),
+                                    Exception("Execution context was destroyed, most likely because of a navigation"),
+                                    "<html>ok</html>"]
+        self.assertEqual(scrape._content(page), "<html>ok</html>")
+        self.assertEqual(page.wait_for_timeout.call_count, 2)
+
+    def test_other_errors_are_not_swallowed(self):
+        page = mock.Mock()
+        page.content.side_effect = Exception("Target page, context or browser has been closed?")   # not a navigation
+        page.content.side_effect = RuntimeError("something else entirely")
+        with self.assertRaises(RuntimeError):
+            scrape._content(page)
+
+    def test_a_page_that_never_settles_is_a_clear_error(self):
+        page = mock.Mock()
+        page.content.side_effect = Exception("Unable to retrieve content because the page is navigating")
+        with self.assertRaises(RuntimeError) as cm:
+            scrape._settled(page.content, page, tries=3)
+        self.assertIn("never settled", str(cm.exception))
+        self.assertEqual(scrape._settled(page.content, page, tries=3, default=""), "")
