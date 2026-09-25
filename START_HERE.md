@@ -3,31 +3,23 @@
 This tool reads the product sheet and downloads every image from each competitor page into a folder on your
 computer, one folder per product, ready for Higgsfield. You run it once a day. That's it.
 
-## One-time setup (about 15 minutes)
+## One-time setup (about 10 minutes)
 
-You need three things installed. Do them in this order.
-
-**1. Python** (the language the tool is written in)
+**1. Install Python** (the language the tool is written in)
 - Go to <https://www.python.org/downloads/> and click the big yellow **Download Python** button.
 - Run the installer. On the first screen **tick the box "Add python.exe to PATH"** (bottom of the window). Then click **Install Now**.
 
-**2. Git** (lets the tool update itself)
-- Go to <https://git-scm.com/download/win>, download the 64-bit installer, run it, and click **Next** through every screen. The defaults are fine.
+**2. Unzip the tool**
+- You were given `pdp-builder.zip`. Right-click it > **Extract All...** > Extract. Put the `pdp-builder` folder somewhere easy, like your Desktop.
+- Don't run anything from inside the zip itself; always from the extracted folder.
 
-**3. The tool itself**
-- Ask for access to the GitHub project `hisensetools-web/pdp-builder` (whoever gave you this can add you as a collaborator).
-- Decide where you want the tool to live, for example your Desktop.
-- Open the folder in File Explorer, click in the address bar at the top, type `cmd` and press Enter. A black window opens.
-- Paste this line and press Enter:
-
-  ```
-  git clone https://github.com/hisensetools-web/pdp-builder.git
-  ```
-
-  A `pdp-builder` folder appears. (If it asks you to sign in to GitHub, sign in with your GitHub account in the window that pops up.)
+**3. Run setup once**
 - Open the `pdp-builder` folder and **double-click `SETUP.bat`**. It downloads the tool's parts and a browser; wait until it says *Setup finished*, then press any key.
 
 If a step complains, take a screenshot of the window and send it to whoever gave you the tool.
+
+**Updates:** when there's a new version you'll get a new zip. Extract it over the old folder (say Yes to replacing
+files). Your downloaded images in `pdp_output` are kept.
 
 ## Every day
 
@@ -35,11 +27,10 @@ Open the `pdp-builder` folder and **double-click `RUN.bat`**. Nothing else.
 
 What it does, in order (you'll see each step in the window):
 
-1. Updates itself if there's a newer version.
-2. Downloads the **Main TikTok Prods V2** tab of the *Product Research TT 2.0* sheet.
-3. Lists the products it will take: every row whose **LP Status** is **Pending** and whose **Competition** cell has a link to the product page.
-4. Downloads every image from each product page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
-5. Skips products it already has, so running it again is quick.
+1. Downloads the **Main TikTok Prods V2** tab of the *Product Research TT 2.0* sheet.
+2. Lists the products it will take: every row whose **LP Status** is **Pending** and whose **Competition** cell has a link to the product page.
+3. Downloads every image from each product page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
+4. Skips products it already has, so running it again is quick.
 
 Sometimes a **browser window opens by itself** showing a "verify you are human" puzzle (Etsy and Amazon do this). Solve the puzzle in that window and leave it alone - the tool waits for you (up to 3 minutes) and then carries on. Don't close the window yourself.
 

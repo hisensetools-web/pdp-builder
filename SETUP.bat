@@ -15,15 +15,6 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-where git >nul 2>nul
-if errorlevel 1 (
-  echo  Git is not installed yet (the tool uses it to update itself).
-  echo  1. Open https://git-scm.com/download/win  and install it, keeping every default.
-  echo  2. Close this window and double-click SETUP.bat again.
-  echo.
-  pause
-  exit /b 1
-)
 set PY=py
 where py >nul 2>nul || set PY=python
 echo  Installing the tool's parts (a few minutes, needs internet) ...

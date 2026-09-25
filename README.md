@@ -1,6 +1,6 @@
 # PDP builder
 
-> **Just here to run it?** Read [START_HERE.md](START_HERE.md): install, double-click `SETUP.bat` once, then `RUN.bat` every day.
+> **Just here to run it?** Read [START_HERE.md](START_HERE.md): install Python, double-click `SETUP.bat` once, then `RUN.bat` every day. `py make_zip.py` builds the `pdp-builder.zip` to hand out.
 
 Give it a competitor product page and it produces everything needed to launch our own version of that page. One folder per product under `pdp_output/<slug>/`:
 
