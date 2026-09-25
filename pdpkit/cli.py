@@ -164,6 +164,8 @@ def cmd_grab(args) -> int:
             hint = "Check the URL opens in your browser; if the store blocks scripts, retry with --headed."
         raise SystemExit(f"could not fetch {args.url}: {msg if 'bot check' in msg else scrape.short_error(e)}\n{hint}") from e
     md = summary.write_summary(data, out_dir, manifest, use_claude=not args.no_claude)
+    from .batch import record_source
+    record_source(out_dir, args.url)
     from urllib.parse import urlparse
     print(f"product : {data.title}")
     print(f"ours    : {config.our_title(data.title, data.vendor, urlparse(data.url).netloc)}")

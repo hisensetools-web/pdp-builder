@@ -71,7 +71,31 @@ class UrlTests(unittest.TestCase):
         self.assertEqual(batch.first_store_url("no links here"), "")
 
 
+STATUS = [
+    ["Product Name", "Adspy", "Competition", "LP Status"],
+    ["Sol Study Light", "https://vm.tiktok.com/a/", "https://bibikstore.ru/rassvet-zakat1  https://bibikstore.ru/polnoch1", "Pending"],
+    ["Done Thing", "", "https://done.com/products/x", "Live"],
+    ["", "", "https://done.com/products/x-continued", ""],           # continuation of the Live row
+    ["No Status", "", "https://new.com/products/y", ""],
+    ["Pending Too", "", "https://p.com/products/z", "pending "],
+]
+
+
 class ReadRowsTests(unittest.TestCase):
+    def test_every_store_url_in_a_cell_and_only_pending_rows(self):
+        with tempfile.TemporaryDirectory() as d:
+            rows, note = batch.read_rows(write_csv(Path(d) / "s.csv", STATUS))
+        self.assertEqual([r.name for r in rows], ["Sol Study Light", "Pending Too"])
+        self.assertEqual(rows[0].urls, ["https://bibikstore.ru/rassvet-zakat1", "https://bibikstore.ru/polnoch1"])
+        self.assertIn("LP Status = Pending only", note)
+        self.assertIn("3 other rows left out", note)
+
+    def test_no_status_column_means_no_filter(self):
+        with tempfile.TemporaryDirectory() as d:
+            rows, note = batch.read_rows(write_csv(Path(d) / "s.csv", MESSY))
+        self.assertEqual(len(rows), 3)
+        self.assertNotIn("LP Status", note)
+
     def test_picks_the_competition_column_and_carries_the_name_down(self):
         with tempfile.TemporaryDirectory() as d:
             rows, note = batch.read_rows(write_csv(Path(d) / "s.csv", MESSY))
@@ -91,6 +115,7 @@ class ReadRowsTests(unittest.TestCase):
         self.assertTrue(all(r.url.startswith("https://") and r.name for r in rows))
         # the row with no competitor link yet is carried in the file but produces no work
         self.assertNotIn("B&BW x Nightmare Before Christmas Candle Holder", [r.name for r in rows])
+        self.assertIn("LP Status = Pending only", _)
 
     def test_a_sheet_without_product_urls_says_so(self):
         with tempfile.TemporaryDirectory() as d:
@@ -129,6 +154,44 @@ class ProcessTests(unittest.TestCase):
                                  ("https://c.com/products/c", None)])
         via.assert_called_once()                                # the failing row was retried browser-only
 
+    def test_a_second_url_in_the_cell_is_added_to_the_same_folder(self):
+        calls = []
+
+        def fake_grab(url, out_dir=None, session=None, all_images=None, use_browser=None, append=False):
+            calls.append((url, append))
+            return mock.Mock(title="Lamp", vendor="", url=url), Path("/tmp/x"), [{"kind": "gallery"}] * (2 if append else 1)
+
+        row = batch.Row("Sol", "https://b.ru/a", 1, extras=["https://b.ru/b"])
+        with mock.patch("pdpkit.scrape.grab", side_effect=fake_grab), mock.patch("pdpkit.scrape.make_session"), \
+             mock.patch("pdpkit.summary.write_summary") as ws, mock.patch.object(batch, "find_existing", return_value=None), \
+             mock.patch.object(batch, "record_source"):
+            results = batch.process([row])
+        self.assertEqual(calls, [("https://b.ru/a", False), ("https://b.ru/b", True)])
+        self.assertEqual(results[0].status, "grabbed")
+        self.assertEqual(results[0].images, 2)
+        ws.assert_called_once()                                  # the summary comes from the first page
+
+    def test_a_link_added_to_a_grabbed_product_is_fetched_into_its_folder(self):
+        calls = []
+
+        def fake_grab(url, out_dir=None, session=None, all_images=None, use_browser=None, append=False):
+            calls.append((url, str(out_dir), append))
+            return mock.Mock(title="Lamp", vendor="", url=url), out_dir, [{"kind": "gallery"}] * 3
+
+        row = batch.Row("Sol", "https://b.ru/a", 1, extras=["https://b.ru/b"])
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "sol"
+            folder.mkdir()
+            (folder / "product_summary.json").write_text(json.dumps({"url": "https://b.ru/a"}))
+            with mock.patch("pdpkit.scrape.grab", side_effect=fake_grab), mock.patch("pdpkit.scrape.make_session"), \
+                 mock.patch("pdpkit.summary.write_summary"), mock.patch.object(config, "OUTPUT_ROOT", Path(d)):
+                results = batch.process([row])
+                again = batch.process([row])
+            self.assertEqual(batch.sources(folder), ["https://b.ru/a", "https://b.ru/b"])
+        self.assertEqual(calls, [("https://b.ru/b", str(folder), True)])   # only the new link, appended
+        self.assertEqual(results[0].status, "grabbed")
+        self.assertEqual(again[0].status, "skipped")
+
     def test_a_store_that_blocks_plain_requests_succeeds_on_the_browser_retry(self):
         calls = []
 
@@ -136,7 +199,7 @@ class ProcessTests(unittest.TestCase):
             calls.append("static")
             raise RuntimeError("HTTP 503 from the store")
 
-        def fake_via_browser(url, out_dir=None, session=None, all_images=None):
+        def fake_via_browser(url, out_dir=None, session=None, all_images=None, append=False):
             calls.append("browser")
             return mock.Mock(title="Amazon Thing", vendor="", url=url), Path("/tmp/x"), [{"kind": "gallery"}]
 

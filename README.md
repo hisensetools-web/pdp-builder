@@ -107,6 +107,12 @@ PDP_SHEET_URL=https://docs.google.com/spreadsheets/d/1O35.../edit?gid=395636284#
 `python pdp.py batch` then downloads that tab fresh on every run, so a row added to the sheet is picked up next
 time without exporting anything. The same link works once on the command line: `python pdp.py batch "<link>"`.
 
+Only rows whose **LP Status** cell says **Pending** are grabbed (the column is found by its header; a sheet without
+one is not filtered; `PDP_STATUS_COLUMN` / `PDP_STATUS_VALUE` in `.env` change the rule). A cell holding two or
+more product links (two colours, two stores) puts all of them into the same product folder, numbered on from the
+first, with repeated photos saved once; a link added to a row later is fetched into the existing folder on the
+next run.
+
 Otherwise, the manual export: Open the tab you want (a CSV export contains **only the tab you are looking at**, which is how you pick one sheet out
 of a workbook), then **File > Download > Comma-separated values**, save it in this folder as `products.csv`, and run:
 

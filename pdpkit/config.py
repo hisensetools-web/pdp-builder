@@ -102,6 +102,9 @@ PRODUCTS_EXAMPLE = ROOT / "products.example.csv"
 # The Google Sheet tab to pull instead of a manual CSV export (the link from your address bar, with #gid=...).
 # The sheet must be shared "Anyone with the link: Viewer".
 SHEET_URL = os.environ.get("PDP_SHEET_URL", "").strip()
+# Only sheet rows whose STATUS_COLUMN cell equals STATUS_VALUE are grabbed (case-insensitive); empty column name = no filter
+STATUS_COLUMN = os.environ.get("PDP_STATUS_COLUMN", "LP Status").strip()
+STATUS_VALUE = os.environ.get("PDP_STATUS_VALUE", "Pending").strip()
 
 # --- Brand ------------------------------------------------------------------
 BRAND_NAME = os.environ.get("BRAND_NAME", "SoleneLife").strip()          # replaces the competitor's brand in titles

@@ -636,7 +636,7 @@ def _sniff_ext(data: bytes, fallback: str = ".jpg") -> str:
 
 
 def download_images(session: requests.Session, refs: list[ImageRef], dest: Path, delay_s: float = 0.4,
-                    captured: dict[str, bytes] | None = None, referer: str = "") -> list[dict]:
+                    captured: dict[str, bytes] | None = None, referer: str = "", append: bool = False) -> list[dict]:
     """Save every image into dest, compressed; returns a manifest (filename, url, alt, kind, bytes...).
     Names: gallery_01.jpg ... then page_01.jpg ...; duplicates by content hash are dropped.
     `captured` holds bytes the browser already loaded: used when a direct download is refused,
@@ -646,6 +646,17 @@ def download_images(session: requests.Session, refs: list[ImageRef], dest: Path,
     manifest: list[dict] = []
     hashes: set[str] = set()
     counters = {"gallery": 0, "page": 0}
+    if append and (dest / "manifest.json").is_file():
+        # a second URL for the same product (another colour, another store): keep numbering, skip repeats
+        try:
+            manifest = json.loads((dest / "manifest.json").read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            manifest = []
+        hashes = {m.get("sha1", "") for m in manifest}
+        known_urls = {m.get("url") for m in manifest}
+        for m in manifest:
+            counters[m.get("kind", "page")] = counters.get(m.get("kind", "page"), 0) + 1
+        refs = [r for r in refs if r.url not in known_urls]
     for ref in refs:
         content, ctype, source = b"", "", "download"
         try:
@@ -859,7 +870,7 @@ def select_for_download(refs: list[ImageRef], all_images: bool) -> list[ImageRef
 
 # --------------------------------------------------------------------------- orchestration
 def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None, session: requests.Session | None = None,
-         all_images: bool | None = None) -> tuple[PageData, Path, list[dict]]:
+         all_images: bool | None = None, append: bool = False) -> tuple[PageData, Path, list[dict]]:
     """Download every image on a product page into <out_dir>/competitor_imgs/, plus the page facts.
 
     Static HTML and the store's product JSON are read first; then, unless told not to, the page
@@ -926,13 +937,13 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     if product_json:
         (out_dir / "product.json").write_text(json.dumps(product_json, indent=2), encoding="utf-8")
     manifest = download_images(session, select_for_download(refs, all_images), out_dir / "competitor_imgs",
-                               captured=captured, referer=url)
+                               captured=captured, referer=url, append=append)
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest
 
 
 def grab_via_browser(url: str, out_dir: Path | None = None, session: requests.Session | None = None,
-                     all_images: bool | None = None) -> tuple[PageData, Path, list[dict]]:
+                     all_images: bool | None = None, append: bool = False) -> tuple[PageData, Path, list[dict]]:
     """grab() for stores that refuse the first plain request (Amazon, Etsy): the HTML comes from the
     browser render and the images from what the browser loaded, no static fetch at all."""
     all_images = config.GRAB_ALL_IMAGES if all_images is None else all_images
@@ -951,6 +962,6 @@ def grab_via_browser(url: str, out_dir: Path | None = None, session: requests.Se
     images.write_compress_bat(out_dir)
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     manifest = download_images(session, select_for_download(data.images, all_images), out_dir / "competitor_imgs",
-                               captured=captured, referer=url)
+                               captured=captured, referer=url, append=append)
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest

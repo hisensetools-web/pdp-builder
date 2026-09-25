@@ -28,6 +28,9 @@ log = logging.getLogger("pdpkit.batch")
 
 URL_RE = re.compile(r"https?://[^\s,]+", re.I)
 NAME_HEADERS = ("product name", "product", "name", "title", "item")
+# only rows whose status cell says this are work to do (PDP_STATUS_COLUMN / PDP_STATUS_VALUE in .env)
+STATUS_COLUMN = config.STATUS_COLUMN
+STATUS_VALUE = config.STATUS_VALUE
 # tracking parameters that make one product URL look like ten
 TRACKING_PREFIXES = ("utm_", "ttclid", "fbclid", "gclid", "gad_", "msclkid", "epik", "irclickid", "_pos", "_sid", "_ss",
                      # Etsy search-result junk: ?ls=s&ga_order=...&ref=sr_gallery-1-2&sr_prefetch=1&content_source=...
@@ -50,6 +53,11 @@ class Row:
     name: str
     url: str
     source_row: int
+    extras: list = field(default_factory=list)     # further store URLs in the same cell (another colour / store)
+
+    @property
+    def urls(self) -> list[str]:
+        return [self.url, *self.extras]
 
 
 @dataclass
@@ -95,13 +103,21 @@ def is_store_url(url: str) -> bool:
     return bool(urlparse(url).path.strip("/"))     # a bare domain is not a product page
 
 
-def first_store_url(cell: str) -> str:
-    """The first product-page URL in a cell (cells often hold several, or a URL plus notes)."""
+def store_urls(cell: str) -> list[str]:
+    """Every product-page URL in a cell, cleaned, in order, without repeats (a cell often holds a
+    URL plus notes, research links, or two colours of the same product)."""
+    out: list[str] = []
     for raw in URL_RE.findall(cell or ""):
         url = clean_url(raw)
-        if is_store_url(url):
-            return url
-    return ""
+        if is_store_url(url) and url not in out:
+            out.append(url)
+    return out
+
+
+def first_store_url(cell: str) -> str:
+    """The first product-page URL in a cell."""
+    urls = store_urls(cell)
+    return urls[0] if urls else ""
 
 
 _SHEET_ID = re.compile(r"docs\.google\.com/spreadsheets/d/([A-Za-z0-9_-]+)")
@@ -168,36 +184,76 @@ def read_rows(path: Path) -> tuple[list[Row], str]:
         name_col = next((c for c in range(url_col - 1, -1, -1)
                          if sum(1 for r in table[1:] if r[c].strip() and not URL_RE.search(r[c])) >= counts[url_col] // 2), None)
 
+    # the status column ("LP Status"): only rows marked Pending are work to do
+    status_col = next((i for i, h in enumerate(header) if h == STATUS_COLUMN.lower()), None) if STATUS_COLUMN else None
+    skipped_status = 0
+
     rows: list[Row] = []
     seen: set[str] = set()
-    last_name = ""
+    last_name = last_status = ""
     for i, r in enumerate(table, start=1):
-        url = first_store_url(r[url_col])
-        if not url or url in seen:
+        urls = [u for u in store_urls(r[url_col]) if u not in seen]
+        if not urls:
             continue
-        seen.add(url)
         name = (r[name_col].strip() if name_col is not None else "")
+        if status_col is not None:
+            status = r[status_col].strip().lower()
+            if name or status:
+                last_status = status
+            if last_status != STATUS_VALUE.lower():
+                skipped_status += 1
+                last_name = name or last_name
+                continue
+        seen.update(urls)
         last_name = name or last_name          # continuation rows repeat the product with a blank name cell
-        rows.append(Row(name=name or last_name, url=url, source_row=i))
+        rows.append(Row(name=name or last_name, url=urls[0], source_row=i, extras=urls[1:]))
     note = f"URL column {url_col + 1}" + (f", name column {name_col + 1}" if name_col is not None else ", no name column")
+    if status_col is not None:
+        note += f", {STATUS_COLUMN} = {STATUS_VALUE} only" + (f" ({skipped_status} other rows left out)" if skipped_status else "")
     return rows, note
+
+
+SOURCES_FILE = "sources.json"
+
+
+def sources(folder: Path) -> list[str]:
+    """Every URL already grabbed into this product folder."""
+    import json
+    urls: list[str] = []
+    try:
+        urls = list(json.loads((folder / SOURCES_FILE).read_text(encoding="utf-8")))
+    except (ValueError, OSError):
+        pass
+    try:
+        first = json.loads((folder / "product_summary.json").read_text(encoding="utf-8")).get("url", "")
+        if first and first not in urls:
+            urls.insert(0, first)
+    except (ValueError, OSError):
+        pass
+    return [clean_url(u).rstrip("/") for u in urls]
+
+
+def record_source(folder: Path, url: str) -> None:
+    import json
+    known = sources(folder)
+    if clean_url(url).rstrip("/") not in known:
+        known.append(clean_url(url).rstrip("/"))
+    try:
+        (folder / SOURCES_FILE).write_text(json.dumps(known, indent=1), encoding="utf-8")
+    except OSError as e:
+        log.debug("cannot write %s: %s", folder / SOURCES_FILE, e)
 
 
 def find_existing(url: str) -> Path | None:
     """The product folder already grabbed from this URL, if any (folders are named after the
     competitor's handle, so match on the stored source URL rather than on the row's name)."""
-    import json
     root = config.OUTPUT_ROOT
     if not root.exists():
         return None
     target = clean_url(url).rstrip("/")
-    for facts in root.glob("*/product_summary.json"):
-        try:
-            stored = json.loads(facts.read_text(encoding="utf-8")).get("url", "")
-        except (ValueError, OSError):
-            continue
-        if clean_url(stored).rstrip("/") == target:
-            return facts.parent
+    for folder in root.iterdir():
+        if folder.is_dir() and target in sources(folder):
+            return folder
     return None
 
 
@@ -217,28 +273,41 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             results.append(res)
             print(f"    would grab {row.url}")
             continue
-        existing = find_existing(row.url)
+        found = {u: find_existing(u) for u in row.urls}
+        existing = next((f for f in found.values() if f), None)
+        todo_urls = row.urls
         if skip_existing and existing:
-            res.status, res.folder = "skipped", str(existing)
-            results.append(res)
-            print(f"    already grabbed -> {existing} (use --redo to grab it again)")
-            continue
+            todo_urls = [u for u in row.urls if not found[u]]
+            if not todo_urls:
+                res.status, res.folder = "skipped", str(existing)
+                results.append(res)
+                print(f"    already grabbed -> {existing} (use --redo to grab it again)")
+                continue
+            print(f"    {len(todo_urls)} new link(s) for a product already grabbed -> adding to {existing}")
         try:
             # the folder is named from the sheet, so it is the name you recognise
-            out_dir = config.product_dir(config.slugify(row.name)) if row.name else None
-            try:
-                data, out_dir, manifest = scrape.grab(row.url, out_dir=out_dir, session=session,
-                                                      all_images=all_images, use_browser=browser)
-            except Exception as first:  # noqa: BLE001 - a store that blocks plain requests (Amazon, Etsy) may still render
-                if browser is not None:
-                    raise
-                print(f"    {short_error(first)}; retrying with the browser only")
+            out_dir = existing if (skip_existing and existing) else (config.product_dir(config.slugify(row.name)) if row.name else None)
+            manifest: list[dict] = []
+            for k, url in enumerate(todo_urls):
+                append = k > 0 or (existing is not None and skip_existing)
+                if k:
+                    print(f"    + {url}")
                 try:
-                    data, out_dir, manifest = scrape.grab_via_browser(row.url, out_dir=out_dir, session=session, all_images=all_images)
-                except Exception as second:  # noqa: BLE001
-                    raise RowError(f"{short_error(first)}; browser retry: {short_error(second) if 'HTTP' in str(second) else str(second)[:120]}") from second
-                res.steps.append("browser")
-            summary.write_summary(data, out_dir, manifest)
+                    data, out_dir, manifest = scrape.grab(url, out_dir=out_dir, session=session, all_images=all_images,
+                                                          use_browser=browser, append=append)
+                except Exception as first:  # noqa: BLE001 - a store that blocks plain requests (Amazon, Etsy) may still render
+                    if browser is not None:
+                        raise
+                    print(f"    {short_error(first)}; retrying with the browser only")
+                    try:
+                        data, out_dir, manifest = scrape.grab_via_browser(url, out_dir=out_dir, session=session,
+                                                                          all_images=all_images, append=append)
+                    except Exception as second:  # noqa: BLE001
+                        raise RowError(f"{short_error(first)}; browser retry: {short_error(second) if 'HTTP' in str(second) else str(second)[:120]}") from second
+                    res.steps.append("browser")
+                if not append:
+                    summary.write_summary(data, out_dir, manifest)
+                record_source(out_dir, url)
             res.folder, res.images = str(out_dir), len(manifest)
             res.title = config.our_title(data.title, data.vendor, urlparse(data.url).netloc)
             res.bytes = sum(m.get("bytes", 0) for m in manifest)

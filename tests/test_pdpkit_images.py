@@ -243,3 +243,24 @@ class CompressFolderTests(unittest.TestCase):
             self.assertTrue((root / "skull-candle-warmer" / "compress_images.bat").is_file())
             self.assertEqual((root / "has-one" / "compress_images.bat").stat().st_mtime_ns, before)   # untouched
             self.assertEqual(images.ensure_bats(root), [])
+
+
+class AppendDownloadTests(unittest.TestCase):
+    def test_second_url_appends_and_skips_repeats(self):
+        a, b, c = png_bytes(300, 300), png_bytes(320, 300), png_bytes(340, 300)
+        responses = {"https://s/a.png": a, "https://s/b.png": b, "https://s/c.png": c, "https://s/a-again.png": a}
+
+        def fake_get(session, url, headers=None):
+            return mock.Mock(status_code=200, content=responses[url], headers={"content-type": "image/png"})
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(scrape, "_get", side_effect=fake_get):
+            dest = Path(d) / "competitor_imgs"
+            first = scrape.download_images(mock.Mock(), [scrape.ImageRef(url="https://s/a.png", kind="gallery", order=1),
+                                                         scrape.ImageRef(url="https://s/b.png", kind="page", order=2)], dest, delay_s=0)
+            second = scrape.download_images(mock.Mock(), [scrape.ImageRef(url="https://s/c.png", kind="gallery", order=1),
+                                                          scrape.ImageRef(url="https://s/a-again.png", kind="gallery", order=2),
+                                                          scrape.ImageRef(url="https://s/b.png", kind="page", order=3)], dest, delay_s=0, append=True)
+            files = sorted(p.name for p in dest.iterdir() if p.suffix == ".jpg")
+        self.assertEqual([m["file"] for m in first], ["gallery_01.jpg", "page_01.jpg"])
+        self.assertEqual([m["file"] for m in second], ["gallery_01.jpg", "page_01.jpg", "gallery_02.jpg"])   # kept + one new
+        self.assertEqual(files, ["gallery_01.jpg", "gallery_02.jpg", "page_01.jpg"])
