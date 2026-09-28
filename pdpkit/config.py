@@ -118,7 +118,7 @@ CLICKUP_URL_FIELD = os.environ.get("CLICKUP_URL_FIELD", "Main Competitor").strip
 CLICKUP_DONE_FIELD = os.environ.get("CLICKUP_DONE_FIELD", "z-imagesPulled").strip()   # empty = never tick anything
 CLICKUP_COMMENT = os.environ.get("CLICKUP_COMMENT", "1").strip() not in ("0", "false", "no")
 # where `batch` gets its products: clickup / sheet (default: clickup when a token is set)
-SOURCE = os.environ.get("PDP_SOURCE", "clickup" if CLICKUP_TOKEN else "sheet").strip().lower()
+SOURCE = os.environ.get("PDP_SOURCE", "clickup").strip().lower()     # clickup is the queue; "sheet" only if asked for
 # Only sheet rows whose STATUS_COLUMN cell equals STATUS_VALUE are grabbed (case-insensitive); empty column name = no filter
 STATUS_COLUMN = os.environ.get("PDP_STATUS_COLUMN", "LP Status").strip()
 STATUS_VALUE = os.environ.get("PDP_STATUS_VALUE", "Pending").strip()

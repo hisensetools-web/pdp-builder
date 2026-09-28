@@ -306,6 +306,10 @@ def cmd_batch(args) -> int:
         print(f"{path.resolve()}")
     elif not given and config.SOURCE == "clickup":
         from . import clickup
+        if not config.CLICKUP_TOKEN:
+            raise SystemExit("The ClickUp key is missing, so nothing can be read.\n"
+                             "Run SETUP.bat again and paste the key (starts with pk_) when it asks - or put a line\n"
+                             f"CLICKUP_TOKEN=pk_... in {config.ROOT / '.env'}")
         try:
             client = clickup.ClickUp()
             rows, note = clickup.product_rows(client, include_done=args.redo)

@@ -3,6 +3,16 @@ title imageGrabber
 cd /d "%~dp0"
 set PY=py
 where py >nul 2>nul || set PY=python
+findstr /b /c:"CLICKUP_TOKEN=pk_" .env >nul 2>nul
+if errorlevel 1 (
+  echo  The ClickUp key is not set up on this computer yet. It starts with pk_ and whoever gave you the tool has it.
+  set /p TOKEN=  Paste the ClickUp key here and press Enter: 
+)
+if defined TOKEN (
+  >>.env echo CLICKUP_TOKEN=%TOKEN%
+  echo  Saved.
+  echo.
+)
 %PY% imageGrabber.py batch %*
 echo.
 if errorlevel 1 (

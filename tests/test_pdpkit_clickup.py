@@ -173,3 +173,14 @@ class RenamedFieldTests(unittest.TestCase):
         posts = [u for m, u, p, j in s.calls if m == "POST"]
         self.assertEqual(posts, ["/task/t1/comment"])
         self.assertNotIn("checkbox", note)
+
+
+class NoTokenTests(unittest.TestCase):
+    def test_batch_without_a_key_stops_instead_of_reading_the_sheet(self):
+        from pdpkit import cli
+        with mock.patch.object(config, "CLICKUP_TOKEN", ""), mock.patch.object(config, "SOURCE", "clickup"), \
+             mock.patch.object(cli, "_self_update", return_value=False), \
+             mock.patch("pdpkit.batch.fetch_sheet") as sheet, self.assertRaises(SystemExit) as cm:
+            cli.main(["batch", "--dry-run"])
+        self.assertIn("ClickUp key is missing", str(cm.exception))
+        sheet.assert_not_called()

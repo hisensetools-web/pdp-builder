@@ -71,6 +71,7 @@ ticked and a comment with the folder name. Moving the card on (ready to launch, 
 | The window says | What it means | What to do |
 |---|---|---|
 | `Python is not installed yet` | Step 1 of setup was skipped or the PATH box wasn't ticked | Reinstall Python, tick **Add python.exe to PATH** |
+| `The ClickUp key is missing` | `.env` has no key | Run `SETUP.bat` (or `RUN.bat`) again and paste the key when asked |
 | `could not read ClickUp` | No internet, or the ClickUp key is wrong / expired | Check you're online. Ask for a fresh key and run `SETUP.bat` again |
 | `no product link on: ...` | That card is in *ready to build* but has no competitor link | Put the link in *Main Competitor* on the card |
 | `0 products` | No card is in *ready to build* with a competitor link | Check ClickUp |
