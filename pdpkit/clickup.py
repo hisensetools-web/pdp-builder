@@ -1,7 +1,7 @@
 """ClickUp as the product queue.
 
 `batch` takes every task in the Product Research list whose status is CLICKUP_STATUS ("ready to
-build"), names the folder after the task, and reads the competitor links from the "Competition URL's"
+build"), names the folder after the task, and reads the competitor links from the "Main Competitor"
 field plus any product links in the description. When the images are on disk it ticks the "Images
 pulled" checkbox and posts one comment on the task, so the team sees it happened from inside ClickUp
 and the task is not pulled again (even from another laptop).
@@ -112,9 +112,18 @@ class ClickUp:
 
 def _field_value(task: dict, name: str):
     want = name.strip().lower()
-    for f in task.get("custom_fields") or []:
+    if not want:
+        return None
+    fields = task.get("custom_fields") or []
+    for f in fields:
         if (f.get("name") or "").strip().lower() == want:
             return f.get("value")
+    # the link field has been renamed once already (Competition URL's -> Main Competitor):
+    # fall back to any URL field whose name says competitor / competition
+    if "compet" in want:
+        for f in fields:
+            if f.get("type") == "url" and "compet" in (f.get("name") or "").lower():
+                return f.get("value")
     return None
 
 
@@ -129,7 +138,7 @@ def product_rows(client: ClickUp, *, list_id: str | None = None, status: str | N
     list_id = list_id or config.CLICKUP_LIST_ID
     status = status or config.CLICKUP_STATUS
     url_field = url_field or config.CLICKUP_URL_FIELD
-    done_field = done_field or config.CLICKUP_DONE_FIELD
+    done_field = config.CLICKUP_DONE_FIELD if done_field is None else done_field
     rows: list[Row] = []
     no_link: list[str] = []
     done = 0
@@ -166,18 +175,19 @@ def mark_done(client: ClickUp, row: Row, folder: str, images: int, *, list_id: s
     if not row.task_id:
         return ""
     list_id = list_id or config.CLICKUP_LIST_ID
-    done_field = done_field or config.CLICKUP_DONE_FIELD
+    done_field = config.CLICKUP_DONE_FIELD if done_field is None else done_field
     comment = config.CLICKUP_COMMENT if comment is None else comment
     notes = []
-    try:
-        fid = client.field_id(list_id, done_field)
-        if fid:
-            client.set_field(row.task_id, fid, True)
-            notes.append(f"'{done_field}' ticked")
-        else:
-            notes.append(f"(no '{done_field}' checkbox on the list: add one so pulled tasks are skipped on other laptops)")
-    except ClickUpError as e:
-        notes.append(f"could not tick '{done_field}': {e}")
+    if done_field:                       # CLICKUP_DONE_FIELD= (empty) turns the checkbox off entirely
+        try:
+            fid = client.field_id(list_id, done_field)
+            if fid:
+                client.set_field(row.task_id, fid, True)
+                notes.append(f"'{done_field}' ticked")
+            else:
+                notes.append(f"(no '{done_field}' checkbox on the list: add one so pulled tasks are skipped on other laptops)")
+        except ClickUpError as e:
+            notes.append(f"could not tick '{done_field}': {e}")
     if comment:
         try:
             links = "\n".join(f"- {u}" for u in row.urls)

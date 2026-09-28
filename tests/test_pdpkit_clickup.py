@@ -6,7 +6,7 @@ from unittest import mock
 
 from pdpkit import batch, clickup, config
 
-URL_FIELD = {"id": "f-url", "name": "Competition URL's", "type": "url"}
+URL_FIELD = {"id": "f-url", "name": "Main Competitor", "type": "url"}
 DONE_FIELD = {"id": "f-done", "name": "z-imagesPulled", "type": "checkbox"}
 
 
@@ -156,3 +156,20 @@ class ProcessHookTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RenamedFieldTests(unittest.TestCase):
+    def test_a_renamed_competitor_field_is_still_found(self):
+        t = task("t1", "Lamp")
+        t["custom_fields"] = [{"id": "f-url", "name": "Competition URL's (old name)", "type": "url", "value": "https://s.com/products/lamp"}]
+        s = FakeSession([t])
+        rows, _ = clickup.product_rows(clickup.ClickUp(token="pk_test", session=s))
+        self.assertEqual(rows[0].url, "https://s.com/products/lamp")
+
+    def test_empty_done_field_means_no_checkbox_at_all(self):
+        s = FakeSession([])
+        c = clickup.ClickUp(token="pk_test", session=s)
+        note = clickup.mark_done(c, batch.Row("X", "https://x.com/products/x", 0, task_id="t1"), "/tmp/x", 3, done_field="", comment=True)
+        posts = [u for m, u, p, j in s.calls if m == "POST"]
+        self.assertEqual(posts, ["/task/t1/comment"])
+        self.assertNotIn("checkbox", note)
