@@ -7,7 +7,7 @@ from unittest import mock
 from pdpkit import batch, clickup, config
 
 URL_FIELD = {"id": "f-url", "name": "Competition URL's", "type": "url"}
-DONE_FIELD = {"id": "f-done", "name": "Images pulled", "type": "checkbox"}
+DONE_FIELD = {"id": "f-done", "name": "z-imagesPulled", "type": "checkbox"}
 
 
 def task(id_, name, url=None, done=None, text=""):

@@ -31,7 +31,7 @@ What it does, in order (you'll see each step in the window):
 
 1. Reads the **Product Research** list in ClickUp and takes every card in the **ready to build** column that has a competitor link (in *Competition URL's* or in the card's description).
 2. Downloads every image from each competitor page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
-3. Ticks **Images pulled** on the card and leaves a comment saying where the images went, so nobody pulls it twice.
+3. Ticks **z-imagesPulled** on the card and leaves a comment saying where the images went, so nobody pulls it twice.
 4. Skips cards it already did, so running it again is quick.
 
 Sometimes a **browser window opens by itself** showing a "verify you are human" puzzle (Etsy and Amazon do this). Solve the puzzle in that window and leave it alone - the tool waits for you (up to 3 minutes) and then carries on. Don't close the window yourself.
@@ -63,7 +63,7 @@ Shopify. The originals are left untouched. Run it again whenever you add more im
 
 In ClickUp, open the product's card, make sure **Competition URL's** holds the link to the competitor's product page
 (the page with the product photos, not the shop's home page; extra links can go in the description), then move the
-card to **ready to build**. Next time you run `RUN.bat` it's included. Once pulled, the card gets **Images pulled**
+card to **ready to build**. Next time you run `RUN.bat` it's included. Once pulled, the card gets **z-imagesPulled**
 ticked and a comment with the folder name. Moving the card on (ready to launch, testing, ...) is up to you.
 
 ## If something looks wrong

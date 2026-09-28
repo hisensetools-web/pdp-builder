@@ -115,7 +115,7 @@ CLICKUP_TOKEN = os.environ.get("CLICKUP_TOKEN", "").strip()
 CLICKUP_LIST_ID = os.environ.get("CLICKUP_LIST_ID", "901222590753").strip()      # TT - Dropshipping > Product Research
 CLICKUP_STATUS = os.environ.get("CLICKUP_STATUS", "ready to build").strip()
 CLICKUP_URL_FIELD = os.environ.get("CLICKUP_URL_FIELD", "Competition URL's").strip()
-CLICKUP_DONE_FIELD = os.environ.get("CLICKUP_DONE_FIELD", "Images pulled").strip()
+CLICKUP_DONE_FIELD = os.environ.get("CLICKUP_DONE_FIELD", "z-imagesPulled").strip()
 CLICKUP_COMMENT = os.environ.get("CLICKUP_COMMENT", "1").strip() not in ("0", "false", "no")
 # where `batch` gets its products: clickup / sheet (default: clickup when a token is set)
 SOURCE = os.environ.get("PDP_SOURCE", "clickup" if CLICKUP_TOKEN else "sheet").strip().lower()

@@ -100,7 +100,7 @@ That is the whole daily routine. `batch`:
    links like TikTok / pipiads are ignored);
 3. grabs every image on each page into `pdp_output\<task name>\competitor_imgs\`, compressed, no duplicates,
    with a `compress_images.bat` beside it for the Higgsfield output later;
-4. ticks the **Images pulled** checkbox on the task and posts one comment with the folder, so the task is skipped
+4. ticks the **z-imagesPulled** checkbox on the task and posts one comment with the folder, so the task is skipped
    next time, from any laptop;
 5. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
    carries on by itself.
