@@ -54,6 +54,8 @@ class Row:
     url: str
     source_row: int
     extras: list = field(default_factory=list)     # further store URLs in the same cell (another colour / store)
+    task_id: str = ""                              # ClickUp task behind this row, when the queue is ClickUp
+    task_url: str = ""
 
     @property
     def urls(self) -> list[str]:
@@ -260,8 +262,20 @@ def find_existing(url: str) -> Path | None:
 
 def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False, all_images: bool | None = None,
             limit: int | None = None, skip_existing: bool = True, dry_run: bool = False,
-            browser: bool | None = None) -> list[Result]:
+            browser: bool | None = None, after=None) -> list[Result]:
+    """`after(row, result)` is called for every row whose images are on disk (grabbed now or found
+    already grabbed), e.g. to tick the ClickUp task. Its return value, if any, is printed."""
     from . import scrape, summary
+
+    def done(row: Row, res: Result) -> None:
+        if after and res.folder:
+            try:
+                note = after(row, res)
+            except Exception as e:  # noqa: BLE001 - the images are saved; a failed write-back must not fail the row
+                note = f"write-back failed: {str(e)[:120]}"
+            if note:
+                res.steps.append("clickup")
+                print(f"    {note}")
 
     results: list[Result] = []
     session = scrape.make_session()
@@ -281,8 +295,9 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             todo_urls = [u for u in row.urls if not found[u]]
             if not todo_urls:
                 res.status, res.folder = "skipped", str(existing)
-                results.append(res)
                 print(f"    already grabbed -> {existing} (use --redo to grab it again)")
+                done(row, res)
+                results.append(res)
                 continue
             print(f"    {len(todo_urls)} new link(s) for a product already grabbed -> adding to {existing}")
         try:
@@ -320,6 +335,7 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
             if manifest and not gallery:
                 print("    note: no separate product gallery detected; every image on the page is saved as page_NN")
+            done(row, res)
         except Exception as e:  # noqa: BLE001 - one bad store must not stop the batch
             res.status, res.error = "failed", (str(e) if isinstance(e, RowError) else short_error(e))
             results.append(res)

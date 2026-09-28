@@ -94,16 +94,19 @@ py pdp.py batch
 
 That is the whole daily routine. `batch`:
 
-1. updates itself (`git pull`), restarting if the tool changed;
-2. downloads the **Main TikTok Prods V2** tab of *Product Research TT 2.0* straight from Google Sheets (no export,
-   no local file; the link is built in, `PDP_SHEET_URL` in `.env` points it elsewhere);
-3. takes every row whose **LP Status** says **Pending** and whose Competition cell holds a product link (all the
-   links in the cell; research links like TikTok / pipiads are ignored);
-4. grabs every image on each page into `pdp_output\<product name>\competitor_imgs\`, compressed, no duplicates,
+1. updates itself (`git pull`) when run from a git checkout, restarting if the tool changed;
+2. reads the **Product Research** list in ClickUp (`CLICKUP_TOKEN` in `.env`) and takes every task in
+   **ready to build** with a competitor link in *Competition URL's* or in the description (all the links; research
+   links like TikTok / pipiads are ignored);
+3. grabs every image on each page into `pdp_output\<task name>\competitor_imgs\`, compressed, no duplicates,
    with a `compress_images.bat` beside it for the Higgsfield output later;
-5. skips products it already has, and only fetches links that are new to a row;
-6. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
+4. ticks the **Images pulled** checkbox on the task and posts one comment with the folder, so the task is skipped
+   next time, from any laptop;
+5. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
    carries on by itself.
+
+`python pdp.py clickup-check` verifies the token, the list, the two fields and prints the tasks a run would take.
+Without a token, `batch` falls back to the Google Sheet (`PDP_SHEET_URL`), and `batch file.csv` reads an export.
 
 Every row's outcome is printed and written to `batch_log.csv`. Nothing you do with the folder afterwards
 (Higgsfield, Shopify) touches the tool.

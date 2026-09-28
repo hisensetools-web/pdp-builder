@@ -1,7 +1,7 @@
 # PDP builder - how to use it (no coding needed)
 
-This tool reads the product sheet and downloads every image from each competitor page into a folder on your
-computer, one folder per product, ready for Higgsfield. You run it once a day. That's it.
+This tool reads the ClickUp product list and downloads every image from each competitor page into a folder on
+your computer, one folder per product, ready for Higgsfield. You run it once a day. That's it.
 
 ## One-time setup (about 10 minutes)
 
@@ -14,7 +14,9 @@ computer, one folder per product, ready for Higgsfield. You run it once a day. T
 - Don't run anything from inside the zip itself; always from the extracted folder.
 
 **3. Run setup once**
-- Open the `pdp-builder` folder and **double-click `SETUP.bat`**. It downloads the tool's parts and a browser; wait until it says *Setup finished*, then press any key.
+- Open the `pdp-builder` folder and **double-click `SETUP.bat`**. It downloads the tool's parts and a browser (a few minutes).
+- At the end it asks for the **ClickUp key** — a long code starting with `pk_`. Whoever gave you this tool has it. Paste it in and press Enter. (Right-click pastes in that black window.)
+- When it says *Setup finished*, press any key.
 
 If a step complains, take a screenshot of the window and send it to whoever gave you the tool.
 
@@ -27,10 +29,10 @@ Open the `pdp-builder` folder and **double-click `RUN.bat`**. Nothing else.
 
 What it does, in order (you'll see each step in the window):
 
-1. Downloads the **Main TikTok Prods V2** tab of the *Product Research TT 2.0* sheet.
-2. Lists the products it will take: every row whose **LP Status** is **Pending** and whose **Competition** cell has a link to the product page.
-3. Downloads every image from each product page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
-4. Skips products it already has, so running it again is quick.
+1. Reads the **Product Research** list in ClickUp and takes every card in the **ready to build** column that has a competitor link (in *Competition URL's* or in the card's description).
+2. Downloads every image from each competitor page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
+3. Ticks **Images pulled** on the card and leaves a comment saying where the images went, so nobody pulls it twice.
+4. Skips cards it already did, so running it again is quick.
 
 Sometimes a **browser window opens by itself** showing a "verify you are human" puzzle (Etsy and Amazon do this). Solve the puzzle in that window and leave it alone - the tool waits for you (up to 3 minutes) and then carries on. Don't close the window yourself.
 
@@ -57,21 +59,22 @@ When you've made the new product images in Higgsfield, save or paste them anywhe
 in the folder, the downloaded ones and yours, is written to a `compressed\` folder as small WebP files ready for
 Shopify. The originals are left untouched. Run it again whenever you add more images; it only does the new ones.
 
-## Adding a product to the sheet
+## Getting a product pulled
 
-In the sheet, fill in **Product Name**, paste the competitor's product page link in **Competition** (the page with
-the product photos, not the shop's home page; several links in one cell are fine), and set **LP Status** to
-**Pending**. Next time you run `RUN.bat` it's included. When a product is done, change its LP Status to anything
-other than Pending and it's left alone.
+In ClickUp, open the product's card, make sure **Competition URL's** holds the link to the competitor's product page
+(the page with the product photos, not the shop's home page; extra links can go in the description), then move the
+card to **ready to build**. Next time you run `RUN.bat` it's included. Once pulled, the card gets **Images pulled**
+ticked and a comment with the folder name. Moving the card on (ready to launch, testing, ...) is up to you.
 
 ## If something looks wrong
 
 | The window says | What it means | What to do |
 |---|---|---|
 | `Python is not installed yet` | Step 1 of setup was skipped or the PATH box wasn't ticked | Reinstall Python, tick **Add python.exe to PATH** |
-| `could not download the sheet` | No internet, or the sheet's sharing was changed | Check you're online. The sheet must be shared as *Anyone with the link - Viewer* |
-| `0 products` | No row has LP Status = Pending with a product link | Check the sheet |
-| `FAILED: HTTP 404` next to a product | The link in the Competition cell is dead | Open it in your browser; fix the link in the sheet |
+| `could not read ClickUp` | No internet, or the ClickUp key is wrong / expired | Check you're online. Ask for a fresh key and run `SETUP.bat` again |
+| `no product link on: ...` | That card is in *ready to build* but has no competitor link | Put the link in *Competition URL's* on the card |
+| `0 products` | No card is in *ready to build* with a competitor link | Check ClickUp |
+| `FAILED: HTTP 404` next to a product | The link on the card is dead | Open it in your browser; fix the link on the card |
 | `the bot check was not cleared in time` | A puzzle window opened and wasn't solved within 3 minutes | Run again and solve it |
 | `already grabbed` next to every product | Nothing new since last run | That's normal |
 | A folder name in another language | The store is foreign and the tool used its title | It's the right product; rename the folder if you like |

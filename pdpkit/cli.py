@@ -293,29 +293,43 @@ def cmd_batch(args) -> int:
     if not args.no_update and _self_update():
         env = dict(os.environ, PDP_RESTARTED="1")
         return subprocess.call([sys.executable, str(config.ROOT / "pdp.py")] + sys.argv[1:], env=env)
-    # the sheet is the source of truth: pulled fresh on every run (a link on the command line
-    # overrides the built-in one; a CSV path reads that file instead)
+    # the queue: ClickUp when a token is set (every task in "ready to build"), else the sheet; a link
+    # or a CSV path on the command line overrides either
     given = args.csv or ""
+    after = None
+    sheet = ""
     if given and not batch.is_sheet_url(given):
         path = Path(given)
         if not path.is_file():
             raise SystemExit(f"{path} not found")
-        sheet = ""
+        rows, note = batch.read_rows(path)
+        print(f"{path.resolve()}")
+    elif not given and config.SOURCE == "clickup":
+        from . import clickup
+        try:
+            client = clickup.ClickUp()
+            rows, note = clickup.product_rows(client, include_done=args.redo)
+        except clickup.ClickUpError as e:
+            raise SystemExit(f"could not read ClickUp: {e}") from e
+        except Exception as e:  # noqa: BLE001
+            raise SystemExit(f"could not read ClickUp: {batch.short_error(e)}") from e
+        after = lambda row, res: clickup.mark_done(client, row, res.folder, res.images)   # noqa: E731
     else:
         sheet = given or config.SHEET_URL
         if not sheet:
-            raise SystemExit("no sheet configured: set PDP_SHEET_URL in .env or pass the sheet link / a CSV file")
+            raise SystemExit("no queue configured: set CLICKUP_TOKEN (or PDP_SHEET_URL) in .env, or pass a CSV file")
         config.SHEET_CACHE.parent.mkdir(parents=True, exist_ok=True)
         path = batch.fetch_sheet(sheet, config.SHEET_CACHE)
         print(f"sheet tab downloaded ({batch.sheet_export_url(sheet).split('gid=')[-1] if 'gid=' in sheet else 'first tab'})")
+        rows, note = batch.read_rows(path)
     _apply_image_opts(args)
-    rows, note = batch.read_rows(path)
-    if not sheet:
-        print(f"{path.resolve()}")
     print(f"{len(rows)} products ({note}):")
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
-    if sheet:
+    if after is not None:
+        print(f"(from ClickUp: every task in '{config.CLICKUP_STATUS}' with a product link in '{config.CLICKUP_URL_FIELD}' "
+              f"or its description; done tasks get '{config.CLICKUP_DONE_FIELD}' ticked)\n")
+    elif sheet:
         print("(rows come from the live sheet; a product is taken when its Competition cell holds a product link "
               f"and its {config.STATUS_COLUMN} cell says {config.STATUS_VALUE})\n")
     else:
@@ -325,7 +339,7 @@ def cmd_batch(args) -> int:
     images.ensure_bats()      # folders grabbed before compress_images.bat existed get one too (skipped rows included)
     results = batch.process(rows, do_guide=args.guide, do_upload=args.upload, all_images=_images_choice(args),
                             limit=args.limit, skip_existing=not args.redo, dry_run=args.dry_run,
-                            browser=_browser_choice(args))
+                            browser=_browser_choice(args), after=after)
     batch.print_summary(results)
     if not args.dry_run:
         print(f"\nlog: {batch.write_log(results, config.ROOT / 'batch_log.csv')}")
@@ -393,6 +407,31 @@ def cmd_hf_fields(args) -> int:
         if image_fields:
             print(f"\n=> reference-image field: {image_fields[0]}   (set HIGGSFIELD_IMAGE_ARG={image_fields[0]} in .env if different from the default)")
         print()
+    return 0
+
+
+def cmd_clickup_check(args) -> int:
+    """Verify the ClickUp token, the list, the fields and show what a run would take."""
+    from . import clickup
+    try:
+        c = clickup.ClickUp()
+        me = c.me()
+        print(f"token OK: {me.get('username') or me.get('email') or me.get('id')}")
+        info = c.list_info(config.CLICKUP_LIST_ID)
+        print(f"list   : {info.get('name')} (id {config.CLICKUP_LIST_ID})")
+        statuses = [st.get('status') for st in info.get('statuses') or []]
+        if statuses:
+            ok = config.CLICKUP_STATUS.lower() in [x.lower() for x in statuses]
+            print(f"status : '{config.CLICKUP_STATUS}' {'found' if ok else 'NOT FOUND'} in {statuses}")
+        names = [f.get("name") for f in c.fields(config.CLICKUP_LIST_ID)]
+        for want in (config.CLICKUP_URL_FIELD, config.CLICKUP_DONE_FIELD):
+            print(f"field  : '{want}' {'found' if want.lower() in [n.lower() for n in names if n] else 'NOT FOUND (add it to the list)'}")
+        rows, note = clickup.product_rows(c)
+        print(f"queue  : {len(rows)} product(s) to pull ({note})")
+        for r in rows:
+            print(f"   {r.name:<45.45} {r.url[:70]}")
+    except clickup.ClickUpError as e:
+        raise SystemExit(f"ClickUp check failed: {e}") from e
     return 0
 
 
@@ -638,12 +677,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("model_id", nargs="+")
     s.set_defaults(func=cmd_hf_fields)
 
+    s = sub.add_parser("clickup-check", help="verify the ClickUp token, list, fields, and show the tasks a run would take")
+    s.set_defaults(func=cmd_clickup_check)
+
     s = sub.add_parser("shopify-check", help="verify the Shopify app credentials and scopes (mints the token if needed)")
     s.set_defaults(func=cmd_shopify_check)
 
     s = sub.add_parser("batch", help="grab every product URL in a spreadsheet export (CSV)")
     s.add_argument("csv", nargs="?", default="",
-                   help="normally nothing: the sheet tab is pulled fresh. Or a Google Sheets link, or a CSV export")
+                   help="normally nothing: the ClickUp queue (or the sheet) is read fresh. Or a Google Sheets link, or a CSV export")
     s.add_argument("--no-update", action="store_true", help="skip the git pull that keeps the tool current")
     s.add_argument("--guide", action="store_true", help="also write the Fudge guide for each product")
     s.add_argument("--upload", action="store_true", help="also upload each product's generated images to Shopify")

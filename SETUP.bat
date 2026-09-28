@@ -37,6 +37,18 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo  Setup finished. From now on, double-click RUN.bat whenever you want to pull the sheet.
+echo.
+findstr /b /c:"CLICKUP_TOKEN=pk_" .env >nul 2>nul
+if errorlevel 1 (
+  echo  Last thing: the ClickUp key. Whoever gave you this tool has it - it starts with pk_
+  echo  ^(they get it in ClickUp: click their avatar ^> Settings ^> Apps ^> API Token^).
+  set /p TOKEN=  Paste the ClickUp key here and press Enter: 
+)
+if defined TOKEN (
+  >>.env echo CLICKUP_TOKEN=%TOKEN%
+  echo  Saved.
+)
+echo.
+echo  Setup finished. From now on, double-click RUN.bat whenever you want to pull the products.
 echo.
 pause

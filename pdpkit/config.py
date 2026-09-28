@@ -105,6 +105,20 @@ DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1O35L85zhY_5WMnsG8gE
 SHEET_URL = os.environ.get("PDP_SHEET_URL", DEFAULT_SHEET_URL).strip()     # empty = read a local CSV instead
 SHEET_CACHE = ROOT / "data" / "sheet.csv"                                   # where the downloaded tab is kept
 AUTO_UPDATE = os.environ.get("PDP_AUTO_UPDATE", "1").strip() not in ("0", "false", "no")   # `batch` runs git pull first
+
+# --- ClickUp (the product queue) -------------------------------------------
+# CLICKUP_TOKEN = a personal API token (Settings > Apps > API Token, starts with pk_). With it, `batch`
+# reads the Product Research list instead of the sheet: every task in CLICKUP_STATUS is grabbed, its
+# links from the CLICKUP_URL_FIELD custom field plus any product links in the description, and the
+# CLICKUP_DONE_FIELD checkbox is ticked (and a comment posted) once the images are on disk.
+CLICKUP_TOKEN = os.environ.get("CLICKUP_TOKEN", "").strip()
+CLICKUP_LIST_ID = os.environ.get("CLICKUP_LIST_ID", "901222590753").strip()      # TT - Dropshipping > Product Research
+CLICKUP_STATUS = os.environ.get("CLICKUP_STATUS", "ready to build").strip()
+CLICKUP_URL_FIELD = os.environ.get("CLICKUP_URL_FIELD", "Competition URL's").strip()
+CLICKUP_DONE_FIELD = os.environ.get("CLICKUP_DONE_FIELD", "Images pulled").strip()
+CLICKUP_COMMENT = os.environ.get("CLICKUP_COMMENT", "1").strip() not in ("0", "false", "no")
+# where `batch` gets its products: clickup / sheet (default: clickup when a token is set)
+SOURCE = os.environ.get("PDP_SOURCE", "clickup" if CLICKUP_TOKEN else "sheet").strip().lower()
 # Only sheet rows whose STATUS_COLUMN cell equals STATUS_VALUE are grabbed (case-insensitive); empty column name = no filter
 STATUS_COLUMN = os.environ.get("PDP_STATUS_COLUMN", "LP Status").strip()
 STATUS_VALUE = os.environ.get("PDP_STATUS_VALUE", "Pending").strip()
