@@ -162,7 +162,7 @@ if __name__ == "__main__":
 
 
 class CompressFolderTests(unittest.TestCase):
-    """`pdp.py compress <folder>` / compress_images.bat: everything under a product folder, light and in one place."""
+    """`imageGrabber.py compress <folder>` / compress_images.bat: everything under a product folder, light and in one place."""
 
     def make_folder(self, root):
         (root / "competitor_imgs").mkdir()
@@ -214,7 +214,7 @@ class CompressFolderTests(unittest.TestCase):
             bat = images.write_compress_bat(Path(d))
             body = bat.read_bytes()
         self.assertEqual(bat.name, "compress_images.bat")
-        self.assertIn(str(config.ROOT / "pdp.py").encode(), body)
+        self.assertIn(str(config.ROOT / "imageGrabber.py").encode(), body)
         self.assertIn(b'compress "%~dp0."', body)
         self.assertIn(b"\r\n", body)       # Windows line endings, cmd.exe is picky
 

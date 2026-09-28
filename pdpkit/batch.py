@@ -2,7 +2,7 @@
 
 Export your sheet as CSV (Google Sheets: File > Download > Comma-separated values) and run
 
-    python pdp.py batch products.csv
+    python imageGrabber.py batch products.csv
 
 The URL column is found by looking at the values, not the header, so any export works: the
 column with the most product-page URLs in it wins. A name column ("product name", "product",
@@ -150,7 +150,7 @@ def fetch_sheet(url: str, dest: Path, session=None) -> Path:
         r = session.get(export, timeout=(10, 60), allow_redirects=True)
     except requests.RequestException as e:
         raise SystemExit(f"could not download the sheet: {short_error(e).replace(' from the store', ' from Google')}. "
-                         "Check the laptop is online; to run without the sheet: py pdp.py batch products.csv") from e
+                         "Check the laptop is online; to run without the sheet: py imageGrabber.py batch products.csv") from e
     body = r.content
     head = body[:400].lstrip().lower()
     if r.status_code in (401, 403) or head.startswith(b"<!doctype") or head.startswith(b"<html") \
@@ -398,6 +398,6 @@ def print_summary(results: list[Result]) -> None:
               f"{total / 1024 / 1024:.1f} MB on disk ({round(100 * (1 - total / src))}% smaller)")
     failed = [r for r in results if r.status == "failed"]
     if failed:
-        print("\nfailed rows (re-run them one at a time with `python pdp.py grab <url>`):")
+        print("\nfailed rows (re-run them one at a time with `python imageGrabber.py grab <url>`):")
         for r in failed:
             print(f"  {r.name or '(no name)'}: {r.url}\n      {r.error}")

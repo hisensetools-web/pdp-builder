@@ -1,8 +1,8 @@
 @echo off
-title PDP builder - one-time setup
+title imageGrabber - one-time setup
 cd /d "%~dp0"
 echo.
-echo  PDP builder - one-time setup
+echo  imageGrabber - one-time setup
 echo  ============================
 echo.
 where py >nul 2>nul || where python >nul 2>nul

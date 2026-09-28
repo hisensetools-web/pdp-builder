@@ -1,6 +1,6 @@
-# PDP builder
+# imageGrabber
 
-> **Just here to run it?** Read [START_HERE.md](START_HERE.md): install Python, double-click `SETUP.bat` once, then `RUN.bat` every day. `py make_zip.py` builds the `pdp-builder.zip` to hand out.
+> **Just here to run it?** Read [START_HERE.md](START_HERE.md): install Python, double-click `SETUP.bat` once, then `RUN.bat` every day. `py make_zip.py` builds the `imageGrabber.zip` to hand out.
 
 Give it a competitor product page and it produces everything needed to launch our own version of that page. One folder per product under `pdp_output/<slug>/`:
 
@@ -18,12 +18,12 @@ Give it a competitor product page and it produces everything needed to launch ou
 
 ```powershell
 git clone https://github.com/hisensetools-web/pdp-builder.git
-cd pdp-builder
+cd pdp-builder            # or rename the folder to imageGrabber
 python -m pip install -r requirements.txt
 copy .env.example .env      # then fill in the keys (see below)
-python pdp.py shopify-check
-python pdp.py hf-check
-python pdp.py hf-models     # which Higgsfield model ids exist; pick one for HIGGSFIELD_MODEL
+python imageGrabber.py shopify-check
+python imageGrabber.py hf-check
+python imageGrabber.py hf-models     # which Higgsfield model ids exist; pick one for HIGGSFIELD_MODEL
 ```
 
 Update later with `git pull`. Tests: `python -m unittest discover -s tests`.
@@ -31,13 +31,13 @@ Update later with `git pull`. Tests: `python -m unittest discover -s tests`.
 ## Commands
 
 ```bash
-python pdp.py grab https://competitor.com/products/glow-neck-massager
-python pdp.py generate glow-neck-massager                     # prompts from prompts.txt (one per paragraph, {title} etc. filled in)
-python pdp.py generate glow-neck-massager --prompt "Studio shot on white, soft shadow, same product"   # or inline
-python pdp.py upload glow-neck-massager                       # creates a DRAFT product with the competitor title
-python pdp.py guide glow-neck-massager                        # template: templates/universal_pdp_template.md
-python pdp.py run https://competitor.com/products/x           # all four, prompts from prompts.txt
-python pdp.py list                                            # what has been grabbed / generated / uploaded
+python imageGrabber.py grab https://competitor.com/products/glow-neck-massager
+python imageGrabber.py generate glow-neck-massager                     # prompts from prompts.txt (one per paragraph, {title} etc. filled in)
+python imageGrabber.py generate glow-neck-massager --prompt "Studio shot on white, soft shadow, same product"   # or inline
+python imageGrabber.py upload glow-neck-massager                       # creates a DRAFT product with the competitor title
+python imageGrabber.py guide glow-neck-massager                        # template: templates/universal_pdp_template.md
+python imageGrabber.py run https://competitor.com/products/x           # all four, prompts from prompts.txt
+python imageGrabber.py list                                            # what has been grabbed / generated / uploaded
 ```
 
 Keys in `.env` (see `.env.example`): `ANTHROPIC_API_KEY` (summary brief + guide text; without it you get the
@@ -45,7 +45,7 @@ raw-facts summary and a mechanical guide), Higgsfield credentials (below), Shopi
 `PDP_TEMPLATE` for the default template.
 
 **Shopify app (for `upload`).** Since January 2026 custom apps are created in the Shopify Dev Dashboard and hand
-you a Client ID + Client secret instead of a token; `pdp.py` mints the Admin API token itself (client credentials
+you a Client ID + Client secret instead of a token; `imageGrabber.py` mints the Admin API token itself (client credentials
 grant, valid 24 h, cached in `data/shopify_token.json`). One-time setup, about five minutes:
 
 1. Shopify admin > **Settings > Apps and sales channels > Develop apps > Build apps in Dev Dashboard** (or go to
@@ -60,7 +60,7 @@ grant, valid 24 h, cached in `data/shopify_token.json`). One-time setup, about f
 5. **Home > Install app** > pick your store > **Install**.
 6. **Settings** (left panel) > copy **Client ID** and **Client secret** into `.env` as `SHOPIFY_CLIENT_ID` /
    `SHOPIFY_CLIENT_SECRET`, plus `SHOPIFY_STORE=your-store.myshopify.com` (the myshopify domain, not the custom domain).
-7. `python pdp.py shopify-check` prints the store name and the scopes the token carries, and says exactly which
+7. `python imageGrabber.py shopify-check` prints the store name and the scopes the token carries, and says exactly which
    scope is missing if any (add it under Access, release again, reinstall).
 
 An older admin-created app whose `shpat_...` token you still have keeps working: put it in `SHOPIFY_ADMIN_TOKEN`
@@ -75,7 +75,7 @@ whose backend prompt enhancer is built for exactly this; without `--photoshoot` 
 with every reference passed as `--image` (default model `nano_banana_2`, change with `HIGGSFIELD_CLI_MODEL` or `--model`).
 `generate --backend api` uses the developer API on platform.higgsfield.ai with `HF_KEY=key:secret` from
 cloud.higgsfield.ai; `HIGGSFIELD_MODEL` / `HIGGSFIELD_IMAGE_ARG` pick the model and the request field that carries the
-reference-image URLs (default `openai/gpt-image-2/edit` / `image_urls`). `python pdp.py hf-check [--backend cli|api]`
+reference-image URLs (default `openai/gpt-image-2/edit` / `image_urls`). `python imageGrabber.py hf-check [--backend cli|api]`
 verifies the credentials without spending credits, and `generate --dry-run` prints the exact request or command.
 Shopify pages are read through `/products/<handle>.json`; every page is also rendered in headless Chromium
 when Playwright is installed (`--no-browser` skips that, `--browser` requires it).
@@ -89,7 +89,7 @@ Useful flags: `generate --ref path.jpg` (choose references by hand), `--num`, `u
 
 ```powershell
 cd C:\Users\top2\Desktop\tt
-py pdp.py batch
+py imageGrabber.py batch
 ```
 
 That is the whole daily routine. `batch`:
@@ -105,7 +105,7 @@ That is the whole daily routine. `batch`:
 5. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
    carries on by itself.
 
-`python pdp.py clickup-check` verifies the token, the list, the two fields and prints the tasks a run would take.
+`python imageGrabber.py clickup-check` verifies the token, the list, the two fields and prints the tasks a run would take.
 Without a token, `batch` falls back to the Google Sheet (`PDP_SHEET_URL`), and `batch file.csv` reads an export.
 
 Every row's outcome is printed and written to `batch_log.csv`. Nothing you do with the folder afterwards
@@ -114,13 +114,13 @@ Every row's outcome is printed and written to `batch_log.csv`. Nothing you do wi
 Occasionally useful:
 
 ```powershell
-py pdp.py batch --dry-run          # show the rows it would take, fetch nothing
-py pdp.py batch --redo             # grab everything again
-py pdp.py batch --limit 2          # first two rows only
-py pdp.py batch mysheet.csv        # a CSV export instead of the live sheet
-py pdp.py grab <url> --name "X"    # one page that is not in the sheet
-py pdp.py compress                 # compress every product folder (or double-click the .bat in one)
-py pdp.py list                     # what has been grabbed
+py imageGrabber.py batch --dry-run          # show the rows it would take, fetch nothing
+py imageGrabber.py batch --redo             # grab everything again
+py imageGrabber.py batch --limit 2          # first two rows only
+py imageGrabber.py batch mysheet.csv        # a CSV export instead of the live sheet
+py imageGrabber.py grab <url> --name "X"    # one page that is not in the sheet
+py imageGrabber.py compress                 # compress every product folder (or double-click the .bat in one)
+py imageGrabber.py list                     # what has been grabbed
 ```
 
 ## Finding the product's own photos
@@ -151,7 +151,7 @@ scroller is found these ways, in order of reliability:
 
 If none of them recognises a scroller, everything is still saved as `page_NN` and the run says so.
 
-When a store still gives the wrong images, `python pdp.py inspect <product>` explains what the extractor saw in the
+When a store still gives the wrong images, `python imageGrabber.py inspect <product>` explains what the extractor saw in the
 page already saved: the product links and ids on the page, which one it would use, every image with the containers
 around it, and the CDN URLs in the raw source.
 
@@ -166,10 +166,10 @@ and the final pixel dimensions per image.
 Per run, on `grab` and `batch`:
 
 ```bash
-python pdp.py batch --no-compress        # save the store's files exactly as served
-python pdp.py batch --keep-originals     # compressed images plus the untouched ones in competitor_imgs/originals/
-python pdp.py batch --max-px 3000 --quality 90    # bigger and sharper
-python pdp.py batch --format webp        # or png
+python imageGrabber.py batch --no-compress        # save the store's files exactly as served
+python imageGrabber.py batch --keep-originals     # compressed images plus the untouched ones in competitor_imgs/originals/
+python imageGrabber.py batch --max-px 3000 --quality 90    # bigger and sharper
+python imageGrabber.py batch --format webp        # or png
 ```
 
 The same settings as defaults in `.env`: `PDP_COMPRESS`, `PDP_IMAGE_MAX_PX` (0 disables resizing),

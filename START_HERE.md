@@ -1,4 +1,4 @@
-# PDP builder - how to use it (no coding needed)
+# imageGrabber - how to use it (no coding needed)
 
 This tool reads the ClickUp product list and downloads every image from each competitor page into a folder on
 your computer, one folder per product, ready for Higgsfield. You run it once a day. That's it.
@@ -10,11 +10,11 @@ your computer, one folder per product, ready for Higgsfield. You run it once a d
 - Run the installer. On the first screen **tick the box "Add python.exe to PATH"** (bottom of the window). Then click **Install Now**.
 
 **2. Unzip the tool**
-- You were given `pdp-builder.zip`. Right-click it > **Extract All...** > Extract. Put the `pdp-builder` folder somewhere easy, like your Desktop.
+- You were given `imageGrabber.zip`. Right-click it > **Extract All...** > Extract. Put the `imageGrabber` folder somewhere easy, like your Desktop.
 - Don't run anything from inside the zip itself; always from the extracted folder.
 
 **3. Run setup once**
-- Open the `pdp-builder` folder and **double-click `SETUP.bat`**. It downloads the tool's parts and a browser (a few minutes).
+- Open the `imageGrabber` folder and **double-click `SETUP.bat`**. It downloads the tool's parts and a browser (a few minutes).
 - At the end it asks for the **ClickUp key** — a long code starting with `pk_`. Whoever gave you this tool has it. Paste it in and press Enter. (Right-click pastes in that black window.)
 - When it says *Setup finished*, press any key.
 
@@ -25,7 +25,7 @@ files). Your downloaded images in `pdp_output` are kept.
 
 ## Every day
 
-Open the `pdp-builder` folder and **double-click `RUN.bat`**. Nothing else.
+Open the `imageGrabber` folder and **double-click `RUN.bat`**. Nothing else.
 
 What it does, in order (you'll see each step in the window):
 
@@ -41,7 +41,7 @@ At the end it prints a summary (`grabbed: 3  skipped: 4`) and the window says **
 ## Where things end up
 
 ```
-pdp-builder\
+imageGrabber\
   pdp_output\
     swinging-ghost-decor\
       competitor_imgs\        <- the downloaded photos: gallery_01.jpg (product photos first), then page_01.jpg ...

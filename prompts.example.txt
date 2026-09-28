@@ -1,4 +1,4 @@
-# Prompts for `python pdp.py generate` (and `run`). One prompt per paragraph: separate prompts with a
+# Prompts for `python imageGrabber.py generate` (and `run`). One prompt per paragraph: separate prompts with a
 # blank line. Lines starting with # are ignored. Every prompt runs against the same reference images
 # (competitor_imgs, gallery first) and produces --num images (default 4).
 # Placeholders filled from the grabbed product: {title} {handle} {vendor} {price} {product_type}.

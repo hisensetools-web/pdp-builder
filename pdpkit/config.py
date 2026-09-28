@@ -1,4 +1,4 @@
-"""Paths, .env loading and settings for the PDP cloning pipeline (pdp.py).
+"""Paths, .env loading and settings for the PDP cloning pipeline (imageGrabber.py).
 
 Reuses the tracker's minimal .env loader so one .env file serves both tools.
 Every setting is optional except where a command says otherwise; a missing key
@@ -53,7 +53,7 @@ IMAGE_QUALITY = int(os.environ.get("PDP_IMAGE_QUALITY", "82"))     # JPEG/WebP q
 IMAGE_FORMAT = os.environ.get("PDP_IMAGE_FORMAT", "jpeg").strip()  # jpeg / webp / png
 # keep the store's untouched file too, in competitor_imgs/originals/
 KEEP_ORIGINALS = os.environ.get("PDP_KEEP_ORIGINALS", "").strip() in ("1", "true", "yes")
-# `pdp.py compress <folder>` / compress_images.bat: the heavy preset for everything in a product folder
+# `imageGrabber.py compress <folder>` / compress_images.bat: the heavy preset for everything in a product folder
 HEAVY_FORMAT = os.environ.get("PDP_HEAVY_FORMAT", "webp").strip()    # webp / jpeg / png
 HEAVY_QUALITY = int(os.environ.get("PDP_HEAVY_QUALITY", "75"))
 HEAVY_MAX_PX = int(os.environ.get("PDP_HEAVY_MAX_PX", "2000"))       # longest side; 0 = never resize
@@ -82,7 +82,7 @@ HIGGSFIELD_CLI_EXTRA = os.environ.get("HIGGSFIELD_CLI_EXTRA", "")               
 
 # --- Shopify Admin API ------------------------------------------------------
 SHOPIFY_STORE = os.environ.get("SHOPIFY_STORE", "").strip()             # e.g. my-brand.myshopify.com
-# Dev Dashboard app (the only kind you can create since Jan 2026): Client ID + Client secret; pdp.py mints
+# Dev Dashboard app (the only kind you can create since Jan 2026): Client ID + Client secret; imageGrabber.py mints
 # the 24-hour Admin API token itself (client credentials grant) and caches it in SHOPIFY_TOKEN_CACHE.
 SHOPIFY_CLIENT_ID = os.environ.get("SHOPIFY_CLIENT_ID", "").strip()
 SHOPIFY_CLIENT_SECRET = os.environ.get("SHOPIFY_CLIENT_SECRET", "").strip()

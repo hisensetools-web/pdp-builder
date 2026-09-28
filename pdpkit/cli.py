@@ -1,4 +1,4 @@
-"""python pdp.py <command>. Run `python pdp.py --help`."""
+"""python imageGrabber.py <command>. Run `python imageGrabber.py --help`."""
 from __future__ import annotations
 
 import argparse
@@ -263,7 +263,7 @@ def cmd_run(args) -> int:
 
 
 def _self_update() -> bool:
-    """`git pull` this checkout so `pdp.py batch` is always the latest tool. True = code changed, restart."""
+    """`git pull` this checkout so `imageGrabber.py batch` is always the latest tool. True = code changed, restart."""
     import os
     import subprocess
     if not config.AUTO_UPDATE or os.environ.get("PDP_RESTARTED") or not (config.ROOT / ".git").is_dir():
@@ -292,7 +292,7 @@ def cmd_batch(args) -> int:
     from . import batch
     if not args.no_update and _self_update():
         env = dict(os.environ, PDP_RESTARTED="1")
-        return subprocess.call([sys.executable, str(config.ROOT / "pdp.py")] + sys.argv[1:], env=env)
+        return subprocess.call([sys.executable, str(config.ROOT / "imageGrabber.py")] + sys.argv[1:], env=env)
     # the queue: ClickUp when a token is set (every task in "ready to build"), else the sheet; a link
     # or a CSV path on the command line overrides either
     given = args.csv or ""
@@ -364,7 +364,7 @@ def cmd_hf_check(args) -> int:
         return 1
     print("Higgsfield credentials OK. Uploaded test image ->", url)
     print(f"model in .env: {config.HIGGSFIELD_MODEL}  (reference field: {config.HIGGSFIELD_IMAGE_ARG})")
-    print("next: python pdp.py generate <product> --prompt \"...\" --num 1   (one image, to confirm the model id)")
+    print("next: python imageGrabber.py generate <product> --prompt \"...\" --num 1   (one image, to confirm the model id)")
     return 0
 
 
@@ -582,7 +582,7 @@ def cmd_compress(args) -> int:
 
 # --------------------------------------------------------------------------- parser
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="pdp.py", description="Clone a competitor PDP: images, summary, Higgsfield renders, Shopify upload, Fudge guide.")
+    p = argparse.ArgumentParser(prog="imageGrabber.py", description="imageGrabber: pull every image from the competitor pages queued in ClickUp (plus summary, Higgsfield, Shopify, guide extras).")
     p.add_argument("-v", "--verbose", action="store_true")
     sub = p.add_subparsers(dest="command", required=True)
 

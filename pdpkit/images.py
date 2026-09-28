@@ -204,10 +204,10 @@ BAT_NAME = "compress_images.bat"
 
 
 def write_compress_bat(folder: Path) -> Path:
-    """Drop a double-clickable compress_images.bat into a product folder. It runs `pdp.py compress`
+    """Drop a double-clickable compress_images.bat into a product folder. It runs `imageGrabber.py compress`
     on that folder, so every image in it (competitor_imgs, the Higgsfield output folder, anything
     else you paste in) is compressed into compressed/ without opening a terminal."""
-    pdp = config.ROOT / "pdp.py"
+    pdp = config.ROOT / "imageGrabber.py"
     lines = [
         "@echo off",
         "rem Compresses every image in this folder and its subfolders into compressed\ (light WebP by default).",

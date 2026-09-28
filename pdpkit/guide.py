@@ -184,7 +184,7 @@ def mechanical_guide(product_name: str, template_text: str, summary_md: str, gen
         "",
         "## Generated images (already uploaded to the Shopify product)",
         "",
-        *(image_lines or ["- none yet: run `python pdp.py generate <product>` first"]),
+        *(image_lines or ["- none yet: run `python imageGrabber.py generate <product>` first"]),
         "",
         "## Product facts (scraped from the competitor page; facts only, rewrite all copy)",
         "",

@@ -281,7 +281,7 @@ def explain_error(e: Exception, model: str) -> str:
     text = str(e)
     if isinstance(e, UploadError):
         return (f"{text}\nHiggsfield accepted the key (it issued the upload URL); the bucket then refused the upload. "
-                "Run again with `python pdp.py -v hf-check` and send me the output, it names the headers the URL was signed for.")
+                "Run again with `python imageGrabber.py -v hf-check` and send me the output, it names the headers the URL was signed for.")
     if isinstance(e, (httpx.TransportError, ConnectionError, OSError)):
         return (f"could not reach platform.higgsfield.ai ({type(e).__name__}: {text[:120]}). This is the network, not the key: "
                 "check VPN / proxy / firewall, then retry.")
@@ -296,7 +296,7 @@ def explain_error(e: Exception, model: str) -> str:
         return (f"Higgsfield rejected the credentials (HTTP {code}: {text[:200]}). HF_KEY must be the API key *id* and *secret* "
                 "from https://cloud.higgsfield.ai (Settings > API keys), joined with a colon, not a key from the higgsfield.ai "
                 "consumer app. If the key is from cloud.higgsfield.ai, check the account has credits and the key was not revoked. "
-                "Alternative: the CLI route (`higgsfield auth login`, then `python pdp.py hf-check --backend cli`).")
+                "Alternative: the CLI route (`higgsfield auth login`, then `python imageGrabber.py hf-check --backend cli`).")
     if code == 404 or "not found" in low:
         return (f"model id '{model}' not found on platform.higgsfield.ai. Open the model's page on cloud.higgsfield.ai, copy the id from its "
                 "API example, and set HIGGSFIELD_MODEL in .env (and HIGGSFIELD_IMAGE_ARG if its reference field is not 'image_urls').")
