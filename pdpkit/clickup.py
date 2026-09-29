@@ -224,3 +224,39 @@ def mark_done(client: ClickUp, row: Row, folder: str, images: int, *, list_id: s
         except ClickUpError as e:
             notes.append(f"could not comment: {e}")
     return "; ".join(notes)
+
+
+def find_rows(client: ClickUp, query: str, *, list_id: str | None = None, url_field: str | None = None) -> list[Row]:
+    """Rows for the cards whose name contains `query` (case-insensitive), or the card with that id or
+    URL, in any status. Used by `imageGrabber.py pull "<name>"`."""
+    import re
+    list_id = list_id or config.CLICKUP_LIST_ID
+    url_field = url_field or config.CLICKUP_URL_FIELD
+    q = query.strip()
+    m = re.search(r"app\.clickup\.com/t/(?:\d+/)?([A-Za-z0-9]+)", q)
+    task_id = m.group(1) if m else (q if re.fullmatch(r"[a-z0-9]{6,12}", q) and not " " in q and any(ch.isdigit() for ch in q) else "")
+    tasks: list[dict] = []
+    if task_id:
+        try:
+            tasks = [client.task(task_id)]
+        except ClickUpError:
+            tasks = []
+    if not tasks:
+        want = _norm(q)
+        tasks = [t for t in client.tasks(list_id, include_closed=True) if want in _norm(t.get("name", ""))]
+        exact = [t for t in tasks if _norm(t.get("name", "")) == want]
+        if exact:
+            tasks = exact
+    rows: list[Row] = []
+    for t in tasks:
+        text = " ".join(x for x in (_field_value(t, url_field) or "", t.get("text_content") or "", t.get("description") or "") if x)
+        if not t.get("text_content") and not t.get("description"):
+            try:
+                full = client.task(t["id"])
+                text += " " + (full.get("text_content") or full.get("markdown_description") or "")
+            except ClickUpError:
+                pass
+        urls = store_urls(text)
+        rows.append(Row(name=(t.get("name") or "").strip(), url=urls[0] if urls else "", source_row=0, extras=urls[1:],
+                        task_id=t.get("id", ""), task_url=t.get("url", "")))
+    return rows

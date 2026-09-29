@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-INCLUDE_FILES = ["imageGrabber.py", "requirements.txt", "SETUP.bat", "RUN.bat", "START_HERE.md", "README.md",
+INCLUDE_FILES = ["imageGrabber.py", "requirements.txt", "SETUP.bat", "RUN.bat", "START_HERE.md", "README.md", "CLAUDE.md",
                  "products.example.csv", "prompts.example.txt", ".env.example"]
 INCLUDE_DIRS = ["pdpkit", "templates"]
 SKIP = {"__pycache__", ".pytest_cache"}

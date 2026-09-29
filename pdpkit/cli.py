@@ -416,6 +416,39 @@ def cmd_hf_fields(args) -> int:
     return 0
 
 
+def cmd_pull(args) -> int:
+    """Grab one ClickUp card by name (any status): `imageGrabber.py pull "Fall Tumbler"`."""
+    from . import batch, clickup
+    if not config.CLICKUP_TOKEN:
+        raise SystemExit("The ClickUp key is missing: run SETUP.bat again and paste it when asked")
+    _apply_image_opts(args)
+    query = " ".join(args.name).strip()
+    try:
+        client = clickup.ClickUp()
+        rows = clickup.find_rows(client, query)
+    except clickup.ClickUpError as e:
+        raise SystemExit(f"could not read ClickUp: {e}") from e
+    if not rows:
+        raise SystemExit(f"no card in the Product Research list matches '{query}'")
+    if len(rows) > 1 and not args.all:
+        names = "\n".join(f"   {r.name}   ({r.task_url})" for r in rows)
+        raise SystemExit(f"{len(rows)} cards match '{query}':\n{names}\nBe more specific, or add --all to pull every one of them.")
+    missing = [r for r in rows if not r.url]
+    for r in missing:
+        print(f"{r.name}: no competitor link on the card (Main Competitor field or description). Skipped.")
+    rows = [r for r in rows if r.url]
+    if not rows:
+        return 1
+    config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    print(f"images go to: {config.OUTPUT_ROOT}")
+    for r in rows:
+        print(f"   {r.name:<45.45} {r.url[:70]}" + (f"  (+{len(r.extras)} more)" if r.extras else ""))
+    results = batch.process(rows, all_images=_images_choice(args), skip_existing=not args.redo, browser=_browser_choice(args),
+                            after=lambda row, res: clickup.mark_done(client, row, res.folder, res.images))
+    batch.print_summary(results)
+    return 0 if all(r.status != "failed" for r in results) else 1
+
+
 def cmd_clickup_check(args) -> int:
     """Verify the ClickUp token, the list, the fields and show what a run would take."""
     from . import clickup
@@ -685,6 +718,17 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("hf-fields", help="show which request fields a Higgsfield model accepts (free: invalid request only)")
     s.add_argument("model_id", nargs="+")
     s.set_defaults(func=cmd_hf_fields)
+
+    s = sub.add_parser("pull", help='grab one ClickUp card by name, whatever its status:  pull "Fall Tumbler"')
+    s.add_argument("name", nargs="+", help="part of the card name (case does not matter), or the card link / id")
+    s.add_argument("--all", action="store_true", help="when several cards match, pull all of them")
+    s.add_argument("--redo", action="store_true", help="grab again even if already pulled")
+    s.add_argument("--browser", action="store_true", help="require the Chromium render")
+    s.add_argument("--no-browser", action="store_true", help="static HTML only")
+    s.add_argument("--headed", action="store_true", help="every render in a visible window")
+    s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos")
+    add_image_opts(s)
+    s.set_defaults(func=cmd_pull)
 
     s = sub.add_parser("clickup-check", help="verify the ClickUp token, list, fields, and show the tasks a run would take")
     s.set_defaults(func=cmd_clickup_check)

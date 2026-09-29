@@ -38,7 +38,8 @@ class FakeSession:
             self.fail_first -= 1
             return FakeResponse(429, {"err": "rate"}, {"Retry-After": "0"})
         if method == "GET" and url.endswith("/task"):
-            assert params["statuses[]"] == [getattr(self, "expect_status", "ready for lp")]
+            if "statuses[]" in params:
+                assert params["statuses[]"] == [getattr(self, "expect_status", "ready for lp")]
             return FakeResponse(200, {"tasks": self.tasks, "last_page": True})
         if method == "GET" and url.endswith("/list/901222590753") or (method == "GET" and url.rstrip("/").endswith("/list/L")):
             return FakeResponse(200, {"id": "L", "name": "Product Research",
@@ -211,3 +212,42 @@ class StatusRenameTests(unittest.TestCase):
         with self.assertRaises(clickup.ClickUpError) as cm:
             clickup.resolve_status(c, "L", "ready for lp")
         self.assertIn("idea, building, live", str(cm.exception))
+
+
+class PullTests(unittest.TestCase):
+    def setUp(self):
+        self.s = FakeSession([task("t1", "Fall Tumbler", url="https://s.com/products/fall"),
+                              task("t2", "Halloween Tumbler | 40 Oz", url="https://s.com/products/hallow"),
+                              task("t3", "Energy Drink Plush", text="no competitor yet, see https://vm.tiktok.com/ZN8/")])
+        self.c = clickup.ClickUp(token="pk_test", session=self.s)
+
+    def test_exact_name_wins_over_partial_matches(self):
+        rows = clickup.find_rows(self.c, "fall tumbler")
+        self.assertEqual([r.name for r in rows], ["Fall Tumbler"])
+        self.assertEqual(rows[0].url, "https://s.com/products/fall")
+
+    def test_partial_name_returns_every_match_in_any_status(self):
+        self.assertEqual(sorted(r.name for r in clickup.find_rows(self.c, "tumbler")), ["Fall Tumbler", "Halloween Tumbler | 40 Oz"])
+        self.assertTrue(all("statuses[]" not in (call[2] or {}) for call in self.s.calls if call[1].endswith("/task")))
+
+    def test_card_link_is_resolved_by_id(self):
+        rows = clickup.find_rows(self.c, "https://app.clickup.com/t/t2")
+        self.assertEqual([r.task_id for r in rows], ["t2"])
+
+    def test_card_without_a_link_is_returned_with_an_empty_url(self):
+        rows = clickup.find_rows(self.c, "Energy Drink Plush")
+        self.assertEqual(rows[0].url, "")
+
+    def test_pull_command_stops_on_ambiguity_and_pulls_one(self):
+        from pdpkit import cli
+        with mock.patch("pdpkit.clickup.ClickUp", return_value=self.c), mock.patch.object(config, "CLICKUP_TOKEN", "pk_test"), \
+             self.assertRaises(SystemExit) as cm:
+            cli.main(["pull", "tumbler"])
+        self.assertIn("2 cards match", str(cm.exception))
+        seen = []
+        with mock.patch("pdpkit.clickup.ClickUp", return_value=self.c), \
+             mock.patch("pdpkit.batch.process", side_effect=lambda rows, **kw: (seen.extend(rows), [batch.Result(r.name, r.url, status="grabbed") for r in rows])[1]), \
+             mock.patch.object(config, "CLICKUP_TOKEN", "pk_test"):
+            code = cli.main(["pull", "Fall", "Tumbler"])
+        self.assertEqual(code, 0)
+        self.assertEqual([r.name for r in seen], ["Fall Tumbler"])
