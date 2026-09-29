@@ -144,6 +144,7 @@ def cmd_grab(args) -> int:
         args.url = "https://" + args.url
     from .batch import clean_url
     args.url = clean_url(args.url)          # tracking / search-result parameters off, ?variant= kept
+    _require_output()
     out_dir = config.product_dir(config.slugify(args.name)) if getattr(args, "name", None) else None
     browser = _browser_choice(args)
     try:
@@ -262,6 +263,62 @@ def cmd_run(args) -> int:
     return 0
 
 
+def _drive_help() -> str:
+    root = config.drive_installed()
+    if root is None:
+        return ("Google Drive for Desktop is not installed on this computer, so there is nowhere to save the images.\n"
+                "  1. Install it: https://www.google.com/drive/download/  and sign in with the Google account the team folder is shared with.\n"
+                f"  2. Open the team's '{config.DRIVE_FOLDER_NAME}' folder link in your browser, right-click its name > Organise > Add shortcut > My Drive.\n"
+                "  3. Wait a minute for Drive to sync, then run again.")
+    return (f"Google Drive is installed ({root}) but there is no '{config.DRIVE_FOLDER_NAME}' folder in it.\n"
+            f"  Open the team's '{config.DRIVE_FOLDER_NAME}' folder link in your browser, right-click its name > Organise > Add shortcut > My Drive,\n"
+            "  wait a minute for Drive to sync, then run again.")
+
+
+def _require_output() -> None:
+    """Every run saves into the team's Google Drive folder; stop with the fix when it is not there.
+    Anything left in the old local pdp_output is moved into Drive on the way."""
+    import shutil
+    if config.OUTPUT_ROOT == config.LOCAL_OUTPUT and not config.ALLOW_LOCAL:
+        raise SystemExit(_drive_help() + "\n  (To save on this computer instead, put PDP_ALLOW_LOCAL=1 in .env.)")
+    config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if config.OUTPUT_IS_DRIVE else ""))
+    local = config.LOCAL_OUTPUT
+    if config.OUTPUT_ROOT != local and local.is_dir():
+        moved, kept = 0, []
+        for d in sorted(p for p in local.iterdir() if p.is_dir()):
+            target = config.OUTPUT_ROOT / d.name
+            if target.exists():
+                kept.append(d.name)
+                continue
+            try:
+                shutil.move(str(d), str(target))
+                moved += 1
+            except OSError as e:
+                kept.append(f"{d.name} ({e.__class__.__name__})")
+        for f in local.glob("*"):
+            if f.is_file() and f.name in ("batch_log.csv",):
+                f.unlink(missing_ok=True)
+        if moved:
+            print(f"moved {moved} product folder(s) from the old pdp_output into Google Drive")
+        if kept:
+            print(f"left in pdp_output (already in Drive or in use): {', '.join(kept)}")
+        try:
+            if not any(local.iterdir()):
+                local.rmdir()
+        except OSError:
+            pass
+
+
+def cmd_drive_check(args) -> int:
+    """Say where images will go and, if Drive is not set up, exactly what to do."""
+    if config.OUTPUT_ROOT == config.LOCAL_OUTPUT and not config.ALLOW_LOCAL:
+        print(_drive_help())
+        return 1
+    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if config.OUTPUT_IS_DRIVE else "  (this computer only)"))
+    return 0
+
+
 def _self_update() -> bool:
     """`git pull` this checkout so `imageGrabber.py batch` is always the latest tool. True = code changed, restart."""
     import os
@@ -327,8 +384,7 @@ def cmd_batch(args) -> int:
         print(f"sheet tab downloaded ({batch.sheet_export_url(sheet).split('gid=')[-1] if 'gid=' in sheet else 'first tab'})")
         rows, note = batch.read_rows(path)
     _apply_image_opts(args)
-    config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if "drive" in str(config.OUTPUT_ROOT).lower() else ""))
+    _require_output()
     print(f"{len(rows)} products ({note}):")
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
@@ -439,8 +495,7 @@ def cmd_pull(args) -> int:
     rows = [r for r in rows if r.url]
     if not rows:
         return 1
-    config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"images go to: {config.OUTPUT_ROOT}")
+    _require_output()
     for r in rows:
         print(f"   {r.name:<45.45} {r.url[:70]}" + (f"  (+{len(r.extras)} more)" if r.extras else ""))
     results = batch.process(rows, all_images=_images_choice(args), skip_existing=not args.redo, browser=_browser_choice(args),
@@ -729,6 +784,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--gallery-only", action="store_true", help="keep only the product gallery photos")
     add_image_opts(s)
     s.set_defaults(func=cmd_pull)
+
+    s = sub.add_parser("drive-check", help="show where images will be saved (the team's Google Drive folder) or what to fix")
+    s.set_defaults(func=cmd_drive_check)
 
     s = sub.add_parser("clickup-check", help="verify the ClickUp token, list, fields, and show the tasks a run would take")
     s.set_defaults(func=cmd_clickup_check)

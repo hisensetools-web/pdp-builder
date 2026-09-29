@@ -105,11 +105,13 @@ That is the whole daily routine. `batch`:
 5. opens a browser window only when a store (Etsy, Amazon) answers with a bot check: click through it and the run
    carries on by itself.
 
-**Shared output.** `PDP_OUTPUT_DIR` in `.env` is where product folders go. `SETUP.bat` sets it to the team's
-`imageGrabber` folder inside Google Drive for Desktop when that is installed (`G:\My Drive\imageGrabber`), so pulled
-images sync to the shared Drive folder by themselves and every laptop sees the same folders (a product grabbed on one
-machine is skipped on the others). `compress_images.bat` inside those folders finds the tool on whichever laptop
-double-clicks it (recorded path, then `IMAGEGRABBER_HOME`, then Desktop / Downloads / Documents).
+**Output = the team's Google Drive folder.** On every run the tool looks for `<My Drive>\imageGrabber` (Google Drive
+for Desktop, any drive letter or the user profile) and saves there; without it the run stops and prints the two setup
+steps (install Drive for Desktop; add the shared folder as a shortcut in My Drive). Anything left in an old local
+`pdp_output` is moved into Drive on the first run. `PDP_OUTPUT_DIR` overrides the location, `PDP_ALLOW_LOCAL=1`
+permits a local `pdp_output` (tests, a machine without Drive), `python imageGrabber.py drive-check` reports the state.
+Because every laptop writes to the same folder, a product grabbed on one is skipped on the others, and
+`compress_images.bat` inside those folders finds the tool on whichever laptop double-clicks it.
 
 `python imageGrabber.py clickup-check` verifies the token, the list, the two fields and prints the tasks a run would take.
 Without a token, `batch` falls back to the Google Sheet (`PDP_SHEET_URL`), and `batch file.csv` reads an export.

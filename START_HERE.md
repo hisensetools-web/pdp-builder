@@ -20,15 +20,14 @@ your computer, one folder per product, ready for Higgsfield. You run it once a d
 
 If a step complains, take a screenshot of the window and send it to whoever gave you the tool.
 
-**4. (Recommended) Google Drive, so the images land in the team folder by themselves**
+**4. Google Drive (required — this is where the images go)**
 - Install Google Drive for Desktop from <https://www.google.com/drive/download/> and sign in with the Google account
   the team folder was shared with.
 - Open the team's **imageGrabber** folder link in your browser. Right-click the folder name at the top → **Organise** →
   **Add shortcut** → **My Drive** → Add.
-- Wait a minute, then double-click `SETUP.bat` once more. It prints *Images will be saved straight into Google Drive*.
+- Wait a minute, then double-click `SETUP.bat` once more. It should print *images go to: G:\My Drive\imageGrabber (Google Drive)*.
 
-From then on every product folder appears in the shared Drive folder as it's pulled, and everyone on the team sees it.
-Without this step the images stay in `imageGrabber\pdp_output` on your own computer.
+The tool only saves into that folder. If Drive isn't set up, `RUN.bat` stops and prints these same steps.
 
 **Updates:** when there's a new version you'll get a new zip. Extract it over the old folder (say Yes to replacing
 files). Your downloaded images in `pdp_output` are kept.
@@ -70,8 +69,8 @@ Two things Claude won't do: move cards between columns (that's yours), or change
 
 ## Where things end up
 
-In the team's Google Drive folder (the window says `images go to: ...` at the start of every run), or in
-`imageGrabber\pdp_output` when Drive isn't set up. Inside, one folder per product:
+In the team's Google Drive folder (the window says `images go to: ...` at the start of every run). Inside, one
+folder per product:
 
 ```
 imageGrabber (Drive)\
@@ -106,6 +105,7 @@ ticked and a comment with the folder name. Moving the card on (ready to launch, 
 |---|---|---|
 | `Python is not installed yet` | Step 1 of setup was skipped or the PATH box wasn't ticked | Reinstall Python, tick **Add python.exe to PATH** |
 | `The ClickUp key is missing` | `.env` has no key | Run `SETUP.bat` (or `RUN.bat`) again and paste the key when asked |
+| `Google Drive for Desktop is not installed` / `no 'imageGrabber' folder in it` | Drive isn't set up on this computer | Do setup step 4 |
 | `could not read ClickUp` | No internet, or the ClickUp key is wrong / expired | Check you're online. Ask for a fresh key and run `SETUP.bat` again |
 | `no product link on: ...` | That card is in *ready for lp* but has no competitor link | Put the link in *Main Competitor* on the card |
 | `0 products` | No card is in *ready for lp* with a competitor link | Check ClickUp |

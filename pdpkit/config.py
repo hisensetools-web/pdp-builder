@@ -33,7 +33,50 @@ def load_dotenv(path: Path = ROOT / ".env") -> None:
 load_dotenv()
 
 # Where every product gets its own folder: pdp_output/<product-slug>/
-OUTPUT_ROOT = Path(os.environ.get("PDP_OUTPUT_DIR", ROOT / "pdp_output"))
+# --- Where product folders go: the team's Google Drive folder ----------------
+# Google Drive for Desktop shows My Drive as a folder on the laptop; the team's shared "imageGrabber"
+# folder (a shortcut in each person's My Drive) is found there on every run. PDP_OUTPUT_DIR overrides.
+DRIVE_FOLDER_NAME = os.environ.get("PDP_DRIVE_FOLDER", "imageGrabber").strip()
+ALLOW_LOCAL = os.environ.get("PDP_ALLOW_LOCAL", "").strip().lower() in ("1", "true", "yes")   # let runs save locally
+LOCAL_OUTPUT = ROOT / "pdp_output"
+
+
+def drive_roots() -> list[Path]:
+    """Every place Google Drive for Desktop may mount My Drive on this machine."""
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
+    roots = [home / "My Drive", home / "Google Drive" / "My Drive", home / "Google Drive"]
+    if os.name == "nt":
+        roots = [Path(f"{d}:/My Drive") for d in "GHIJKLMNOPQRSTUVWXYZ"] + roots
+    extra = os.environ.get("PDP_DRIVE_ROOT", "").strip()
+    return ([Path(extra)] if extra else []) + roots
+
+
+def find_drive_folder() -> Path | None:
+    """<My Drive>/imageGrabber when Google Drive for Desktop is installed and the shared folder is in My Drive."""
+    for root in drive_roots():
+        try:
+            cand = root / DRIVE_FOLDER_NAME
+            if cand.is_dir():
+                return cand
+        except OSError:
+            continue
+    return None
+
+
+def drive_installed() -> Path | None:
+    for root in drive_roots():
+        try:
+            if root.is_dir():
+                return root
+        except OSError:
+            continue
+    return None
+
+
+_override = os.environ.get("PDP_OUTPUT_DIR", "").strip()
+DRIVE_FOLDER = None if _override else find_drive_folder()
+OUTPUT_ROOT = Path(_override) if _override else (DRIVE_FOLDER or LOCAL_OUTPUT)
+OUTPUT_IS_DRIVE = DRIVE_FOLDER is not None or "drive" in str(OUTPUT_ROOT).lower()
 
 REQUEST_TIMEOUT = (10, 45)
 REQUEST_RETRIES = 3

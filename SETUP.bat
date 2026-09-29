@@ -49,9 +49,13 @@ if defined TOKEN (
   echo  Saved.
 )
 echo.
-rem ---- images straight into the shared Google Drive folder (needs Google Drive for Desktop)
-findstr /b /c:"PDP_OUTPUT_DIR=" .env >nul 2>nul
-if not errorlevel 1 goto :outputdone
+rem ---- the images go into the team's Google Drive folder; say whether that is ready
+echo.
+%PY% imageGrabber.py drive-check
+if errorlevel 1 (
+  echo.
+  echo  Do the Google Drive steps above, then double-click SETUP.bat again. RUN.bat will not save anything until then.
+)
 set GDRIVE=
 for %%D in (G H I J K L M N O P Q R S T U V W X Y Z) do if not defined GDRIVE if exist "%%D:\My Drive\" set GDRIVE=%%D:\My Drive
 if not defined GDRIVE if exist "%USERPROFILE%\My Drive\" set GDRIVE=%USERPROFILE%\My Drive

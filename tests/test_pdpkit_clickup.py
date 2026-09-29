@@ -241,13 +241,13 @@ class PullTests(unittest.TestCase):
     def test_pull_command_stops_on_ambiguity_and_pulls_one(self):
         from pdpkit import cli
         with mock.patch("pdpkit.clickup.ClickUp", return_value=self.c), mock.patch.object(config, "CLICKUP_TOKEN", "pk_test"), \
-             self.assertRaises(SystemExit) as cm:
+             mock.patch.object(config, "ALLOW_LOCAL", True), self.assertRaises(SystemExit) as cm:
             cli.main(["pull", "tumbler"])
         self.assertIn("2 cards match", str(cm.exception))
         seen = []
         with mock.patch("pdpkit.clickup.ClickUp", return_value=self.c), \
              mock.patch("pdpkit.batch.process", side_effect=lambda rows, **kw: (seen.extend(rows), [batch.Result(r.name, r.url, status="grabbed") for r in rows])[1]), \
-             mock.patch.object(config, "CLICKUP_TOKEN", "pk_test"):
+             mock.patch.object(config, "CLICKUP_TOKEN", "pk_test"), mock.patch.object(config, "ALLOW_LOCAL", True):
             code = cli.main(["pull", "Fall", "Tumbler"])
         self.assertEqual(code, 0)
         self.assertEqual([r.name for r in seen], ["Fall Tumbler"])
