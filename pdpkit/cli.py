@@ -327,6 +327,8 @@ def cmd_batch(args) -> int:
         print(f"sheet tab downloaded ({batch.sheet_export_url(sheet).split('gid=')[-1] if 'gid=' in sheet else 'first tab'})")
         rows, note = batch.read_rows(path)
     _apply_image_opts(args)
+    config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if "drive" in str(config.OUTPUT_ROOT).lower() else ""))
     print(f"{len(rows)} products ({note}):")
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")

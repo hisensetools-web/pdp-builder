@@ -49,6 +49,33 @@ if defined TOKEN (
   echo  Saved.
 )
 echo.
+rem ---- images straight into the shared Google Drive folder (needs Google Drive for Desktop)
+findstr /b /c:"PDP_OUTPUT_DIR=" .env >nul 2>nul
+if not errorlevel 1 goto :outputdone
+set GDRIVE=
+for %%D in (G H I J K L M N O P Q R S T U V W X Y Z) do if not defined GDRIVE if exist "%%D:\My Drive\" set GDRIVE=%%D:\My Drive
+if not defined GDRIVE if exist "%USERPROFILE%\My Drive\" set GDRIVE=%USERPROFILE%\My Drive
+if not defined GDRIVE if exist "%USERPROFILE%\Google Drive\My Drive\" set GDRIVE=%USERPROFILE%\Google Drive\My Drive
+if not defined GDRIVE (
+  echo.
+  echo  Google Drive for Desktop is not installed, so images will stay on this computer (in pdp_output).
+  echo  To have them land in the team's Drive folder automatically: install https://www.google.com/drive/download/
+  echo  sign in, open the shared imageGrabber folder in your browser, right-click it ^> Organise ^> Add shortcut ^> My Drive,
+  echo  then double-click SETUP.bat again.
+  goto :outputdone
+)
+if not exist "%GDRIVE%\imageGrabber\" (
+  echo.
+  echo  Google Drive for Desktop found at %GDRIVE%, but no imageGrabber folder in it yet.
+  echo  Open the shared imageGrabber folder in your browser, right-click it ^> Organise ^> Add shortcut ^> My Drive,
+  echo  wait a minute for Drive to sync, then double-click SETUP.bat again. Until then images stay in pdp_output.
+  goto :outputdone
+)
+>>.env echo PDP_OUTPUT_DIR=%GDRIVE%\imageGrabber
+echo.
+echo  Images will be saved straight into Google Drive: %GDRIVE%\imageGrabber
+:outputdone
+echo.
 echo  Setup finished. From now on, double-click RUN.bat whenever you want to pull the products.
 echo.
 pause

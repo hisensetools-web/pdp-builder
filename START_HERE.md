@@ -20,6 +20,16 @@ your computer, one folder per product, ready for Higgsfield. You run it once a d
 
 If a step complains, take a screenshot of the window and send it to whoever gave you the tool.
 
+**4. (Recommended) Google Drive, so the images land in the team folder by themselves**
+- Install Google Drive for Desktop from <https://www.google.com/drive/download/> and sign in with the Google account
+  the team folder was shared with.
+- Open the team's **imageGrabber** folder link in your browser. Right-click the folder name at the top → **Organise** →
+  **Add shortcut** → **My Drive** → Add.
+- Wait a minute, then double-click `SETUP.bat` once more. It prints *Images will be saved straight into Google Drive*.
+
+From then on every product folder appears in the shared Drive folder as it's pulled, and everyone on the team sees it.
+Without this step the images stay in `imageGrabber\pdp_output` on your own computer.
+
 **Updates:** when there's a new version you'll get a new zip. Extract it over the old folder (say Yes to replacing
 files). Your downloaded images in `pdp_output` are kept.
 
@@ -40,16 +50,20 @@ At the end it prints a summary (`grabbed: 3  skipped: 4`) and the window says **
 
 ## Where things end up
 
+In the team's Google Drive folder (the window says `images go to: ...` at the start of every run), or in
+`imageGrabber\pdp_output` when Drive isn't set up. Inside, one folder per product:
+
 ```
-imageGrabber\
-  pdp_output\
+imageGrabber (Drive)\
     swinging-ghost-decor\
       competitor_imgs\        <- the downloaded photos: gallery_01.jpg (product photos first), then page_01.jpg ...
       compress_images.bat     <- see below
       product_summary.md      <- the competitor page's text: title, price, bullets, FAQ
     bling-ghostface-collection\
       ...
-  batch_log.csv               <- one line per product per run: what happened
+```
+
+`batch_log.csv` in the tool's own folder has one line per product per run.
 ```
 
 ## After Higgsfield: compressing the new images

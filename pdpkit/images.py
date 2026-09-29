@@ -206,7 +206,10 @@ BAT_NAME = "compress_images.bat"
 def write_compress_bat(folder: Path) -> Path:
     """Drop a double-clickable compress_images.bat into a product folder. It runs `imageGrabber.py compress`
     on that folder, so every image in it (competitor_imgs, the Higgsfield output folder, anything
-    else you paste in) is compressed into compressed/ without opening a terminal."""
+    else you paste in) is compressed into compressed/ without opening a terminal.
+
+    The product folder may live in a shared Google Drive folder, so the .bat looks for the tool in
+    a few places: where it was when the folder was made, IMAGEGRABBER_HOME, then the usual spots."""
     pdp = config.ROOT / "imageGrabber.py"
     lines = [
         "@echo off",
@@ -214,7 +217,21 @@ def write_compress_bat(folder: Path) -> Path:
         "rem Paste your Higgsfield images anywhere in this folder and double-click. Re-running only does new files.",
         "rem Options: compress_images.bat --format jpeg --quality 70 --max-px 1600   |   --redo   |   --in-place",
         'cd /d "%~dp0"',
-        f'python "{pdp}" compress "%~dp0." %*',
+        "set TOOL=",
+        f'if exist "{pdp}" set TOOL={pdp}',
+        'if not defined TOOL if exist "%IMAGEGRABBER_HOME%\imageGrabber.py" set TOOL=%IMAGEGRABBER_HOME%\imageGrabber.py',
+        'if not defined TOOL if exist "%USERPROFILE%\Desktop\imageGrabber\imageGrabber.py" set TOOL=%USERPROFILE%\Desktop\imageGrabber\imageGrabber.py',
+        'if not defined TOOL if exist "%USERPROFILE%\Downloads\imageGrabber\imageGrabber.py" set TOOL=%USERPROFILE%\Downloads\imageGrabber\imageGrabber.py',
+        'if not defined TOOL if exist "%USERPROFILE%\Documents\imageGrabber\imageGrabber.py" set TOOL=%USERPROFILE%\Documents\imageGrabber\imageGrabber.py',
+        "if not defined TOOL (",
+        "  echo  Cannot find the imageGrabber folder on this computer. Put it on your Desktop, or open it and run:",
+        '  echo      py imageGrabber.py compress "%~dp0."',
+        "  pause",
+        "  exit /b 1",
+        ")",
+        "set PY=py",
+        "where py >nul 2>nul || set PY=python",
+        '%PY% "%TOOL%" compress "%~dp0." %*',
         "if errorlevel 1 echo.& echo Something went wrong, see above.",
         "pause",
         "",

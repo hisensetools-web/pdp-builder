@@ -216,6 +216,8 @@ class CompressFolderTests(unittest.TestCase):
         self.assertEqual(bat.name, "compress_images.bat")
         self.assertIn(str(config.ROOT / "imageGrabber.py").encode(), body)
         self.assertIn(b'compress "%~dp0."', body)
+        self.assertIn(b"IMAGEGRABBER_HOME", body)                       # works from a shared Drive folder on any laptop
+        self.assertIn(b"Desktop\\imageGrabber\\imageGrabber.py", body)
         self.assertIn(b"\r\n", body)       # Windows line endings, cmd.exe is picky
 
     def test_grab_drops_the_bat_into_the_product_folder(self):
