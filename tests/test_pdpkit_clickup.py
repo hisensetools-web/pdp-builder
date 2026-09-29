@@ -38,8 +38,11 @@ class FakeSession:
             self.fail_first -= 1
             return FakeResponse(429, {"err": "rate"}, {"Retry-After": "0"})
         if method == "GET" and url.endswith("/task"):
-            assert params["statuses[]"] == ["ready to build"]
+            assert params["statuses[]"] == [getattr(self, "expect_status", "ready for lp")]
             return FakeResponse(200, {"tasks": self.tasks, "last_page": True})
+        if method == "GET" and url.endswith("/list/901222590753") or (method == "GET" and url.rstrip("/").endswith("/list/L")):
+            return FakeResponse(200, {"id": "L", "name": "Product Research",
+                                      "statuses": [{"status": st} for st in getattr(self, "statuses", ["researching", "ready for lp", "lp ready", "testing"])]})
         if method == "GET" and url.endswith("/field"):
             return FakeResponse(200, {"fields": self.fields})
         if method == "GET" and "/task/" in url:
@@ -184,3 +187,27 @@ class NoTokenTests(unittest.TestCase):
             cli.main(["batch", "--dry-run"])
         self.assertIn("ClickUp key is missing", str(cm.exception))
         sheet.assert_not_called()
+
+
+class StatusRenameTests(unittest.TestCase):
+    def test_renamed_column_is_found_through_the_aliases(self):
+        s = FakeSession([task("t1", "Lamp", url="https://s.com/products/lamp")])
+        s.statuses = ["researching", "ready for lp", "lp ready", "testing"]
+        c = clickup.ClickUp(token="pk_test", session=s)
+        real, note = clickup.resolve_status(c, "L", "ready to build")      # the old configured name
+        self.assertEqual(real, "ready for lp")
+        self.assertIn("does not exist", note)
+        rows, _ = clickup.product_rows(c, list_id="L", status="ready to build")
+        self.assertEqual([r.name for r in rows], ["Lamp"])
+
+    def test_case_and_spacing_do_not_matter(self):
+        s = FakeSession([]); s.statuses = ["Ready For LP", "testing"]
+        c = clickup.ClickUp(token="pk_test", session=s)
+        self.assertEqual(clickup.resolve_status(c, "L", "ready for lp"), ("Ready For LP", ""))
+
+    def test_unknown_status_lists_the_real_ones(self):
+        s = FakeSession([]); s.statuses = ["idea", "building", "live"]
+        c = clickup.ClickUp(token="pk_test", session=s)
+        with self.assertRaises(clickup.ClickUpError) as cm:
+            clickup.resolve_status(c, "L", "ready for lp")
+        self.assertIn("idea, building, live", str(cm.exception))

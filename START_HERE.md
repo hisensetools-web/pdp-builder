@@ -29,7 +29,7 @@ Open the `imageGrabber` folder and **double-click `RUN.bat`**. Nothing else.
 
 What it does, in order (you'll see each step in the window):
 
-1. Reads the **Product Research** list in ClickUp and takes every card in the **ready to build** column that has a competitor link (in *Main Competitor* or in the card's description).
+1. Reads the **Product Research** list in ClickUp and takes every card in the **ready for lp** column that has a competitor link (in *Main Competitor* or in the card's description).
 2. Downloads every image from each competitor page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
 3. Ticks **z-imagesPulled** on the card and leaves a comment saying where the images went, so nobody pulls it twice.
 4. Skips cards it already did, so running it again is quick.
@@ -63,7 +63,7 @@ Shopify. The originals are left untouched. Run it again whenever you add more im
 
 In ClickUp, open the product's card, make sure **Main Competitor** holds the link to the competitor's product page
 (the page with the product photos, not the shop's home page; extra links can go in the description), then move the
-card to **ready to build**. Next time you run `RUN.bat` it's included. Once pulled, the card gets **z-imagesPulled**
+card to **ready for lp**. Next time you run `RUN.bat` it's included. Once pulled, the card gets **z-imagesPulled**
 ticked and a comment with the folder name. Moving the card on (ready to launch, testing, ...) is up to you.
 
 ## If something looks wrong
@@ -73,8 +73,8 @@ ticked and a comment with the folder name. Moving the card on (ready to launch, 
 | `Python is not installed yet` | Step 1 of setup was skipped or the PATH box wasn't ticked | Reinstall Python, tick **Add python.exe to PATH** |
 | `The ClickUp key is missing` | `.env` has no key | Run `SETUP.bat` (or `RUN.bat`) again and paste the key when asked |
 | `could not read ClickUp` | No internet, or the ClickUp key is wrong / expired | Check you're online. Ask for a fresh key and run `SETUP.bat` again |
-| `no product link on: ...` | That card is in *ready to build* but has no competitor link | Put the link in *Main Competitor* on the card |
-| `0 products` | No card is in *ready to build* with a competitor link | Check ClickUp |
+| `no product link on: ...` | That card is in *ready for lp* but has no competitor link | Put the link in *Main Competitor* on the card |
+| `0 products` | No card is in *ready for lp* with a competitor link | Check ClickUp |
 | `FAILED: HTTP 404` next to a product | The link on the card is dead | Open it in your browser; fix the link on the card |
 | `the bot check was not cleared in time` | A puzzle window opened and wasn't solved within 3 minutes | Run again and solve it |
 | `already grabbed` next to every product | Nothing new since last run | That's normal |

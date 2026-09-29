@@ -127,6 +127,31 @@ def _field_value(task: dict, name: str):
     return None
 
 
+# names the "pull now" column has had, in case it is renamed again (compared with spaces/case removed)
+STATUS_ALIASES = ("ready for lp", "ready to lp", "ready for landing page", "ready to build", "lp pending", "pending lp", "pending")
+
+
+def _norm(s: str) -> str:
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
+def resolve_status(client: ClickUp, list_id: str, wanted: str) -> tuple[str, str]:
+    """The list's real status name for `wanted`: exact (ignoring case/spaces), else a known alias.
+    Returns (status, note); raises with the list's statuses when nothing fits."""
+    statuses = [st.get("status", "") for st in client.list_info(list_id).get("statuses") or []]
+    if not statuses:
+        return wanted, ""
+    by_norm = {_norm(st): st for st in statuses}
+    if _norm(wanted) in by_norm:
+        return by_norm[_norm(wanted)], ""
+    for alias in STATUS_ALIASES:
+        if _norm(alias) in by_norm:
+            real = by_norm[_norm(alias)]
+            return real, f"status '{wanted}' does not exist on the list any more; using '{real}' (set CLICKUP_STATUS to silence this)"
+    raise ClickUpError(f"status '{wanted}' is not on the list, and none of the usual names are either. "
+                       f"The list has: {', '.join(statuses)}. Set CLICKUP_STATUS in .env to the right one.")
+
+
 def _truthy(v) -> bool:
     return v is True or str(v).strip().lower() in ("true", "1", "yes")
 
@@ -142,6 +167,9 @@ def product_rows(client: ClickUp, *, list_id: str | None = None, status: str | N
     rows: list[Row] = []
     no_link: list[str] = []
     done = 0
+    status, status_note = resolve_status(client, list_id, status)
+    if status_note:
+        print(f"    {status_note}", flush=True)
     tasks = client.tasks(list_id, statuses=[status])
     for t in tasks:
         name = (t.get("name") or "").strip()

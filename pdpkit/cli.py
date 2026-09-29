@@ -293,7 +293,7 @@ def cmd_batch(args) -> int:
     if not args.no_update and _self_update():
         env = dict(os.environ, PDP_RESTARTED="1")
         return subprocess.call([sys.executable, str(config.ROOT / "imageGrabber.py")] + sys.argv[1:], env=env)
-    # the queue: ClickUp when a token is set (every task in "ready to build"), else the sheet; a link
+    # the queue: ClickUp when a token is set (every task in the "ready for lp" column), else the sheet; a link
     # or a CSV path on the command line overrides either
     given = args.csv or ""
     after = None
@@ -425,8 +425,11 @@ def cmd_clickup_check(args) -> int:
         print(f"list   : {info.get('name')} (id {config.CLICKUP_LIST_ID})")
         statuses = [st.get('status') for st in info.get('statuses') or []]
         if statuses:
-            ok = config.CLICKUP_STATUS.lower() in [x.lower() for x in statuses]
-            print(f"status : '{config.CLICKUP_STATUS}' {'found' if ok else 'NOT FOUND'} in {statuses}")
+            try:
+                real, note = clickup.resolve_status(c, config.CLICKUP_LIST_ID, config.CLICKUP_STATUS)
+                print(f"status : pulling '{real}'" + (f"  ({note})" if note else "") + f"  list has {statuses}")
+            except clickup.ClickUpError as e:
+                print(f"status : {e}")
         names = [f.get("name") for f in c.fields(config.CLICKUP_LIST_ID)]
         for want in (config.CLICKUP_URL_FIELD, config.CLICKUP_DONE_FIELD):
             print(f"field  : '{want}' {'found' if want.lower() in [n.lower() for n in names if n] else 'NOT FOUND (add it to the list)'}")
