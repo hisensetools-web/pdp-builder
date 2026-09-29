@@ -48,6 +48,26 @@ Sometimes a **browser window opens by itself** showing a "verify you are human" 
 
 At the end it prints a summary (`grabbed: 3  skipped: 4`) and the window says **Done**. Press any key to close it.
 
+## Talking to Claude instead of double-clicking (optional)
+
+The `imageGrabber` folder contains a `CLAUDE.md` that teaches Claude how to run the tool. Once the Claude desktop app is
+pointed at the folder, you just say what you want.
+
+1. Install the **Claude desktop app** from <https://claude.ai/download> and sign in with the team's Claude account.
+2. In the app, open the **Code** tab, click **Open folder** (or **New session**) and choose your `imageGrabber` folder.
+3. Type, in plain words, for example:
+   - *grab the images for Fall Tumbler*
+   - *pull everything that's ready*
+   - *pull Halloween Tumbler again*
+   - *compress the images for Energy Drink Plush*
+   - *is ClickUp connected?*
+
+Claude runs the tool and tells you how many images it got, where they went, and that the ClickUp card was ticked.
+If a browser window with a "verify you are human" puzzle appears, solve it and leave the window open — Claude will
+say so. Claude may ask you to allow a command the first time; that's normal, click Allow.
+
+Two things Claude won't do: move cards between columns (that's yours), or change the tool itself on your laptop.
+
 ## Where things end up
 
 In the team's Google Drive folder (the window says `images go to: ...` at the start of every run), or in
