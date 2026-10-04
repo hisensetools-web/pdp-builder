@@ -874,7 +874,7 @@ def select_for_download(refs: list[ImageRef], all_images: bool) -> list[ImageRef
 # --------------------------------------------------------------------------- orchestration
 def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None, session: requests.Session | None = None,
          all_images: bool | None = None, append: bool = False) -> tuple[PageData, Path, list[dict]]:
-    """Download every image on a product page into <out_dir>/competitor_imgs/, plus the page facts.
+    """Download every image on a product page into <out_dir>/custom-images/, plus the page facts.
 
     Static HTML and the store's product JSON are read first; then, unless told not to, the page
     is opened in headless Chromium, scrolled, its carousels stepped through, and every image the
@@ -939,7 +939,7 @@ def grab(url: str, out_dir: Path | None = None, use_browser: bool | None = None,
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
     if product_json:
         (out_dir / "product.json").write_text(json.dumps(product_json, indent=2), encoding="utf-8")
-    manifest = download_images(session, select_for_download(refs, all_images), out_dir / "competitor_imgs",
+    manifest = download_images(session, select_for_download(refs, all_images), out_dir / config.IMAGES_DIR,
                                captured=captured, referer=url, append=append)
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest
@@ -964,7 +964,7 @@ def grab_via_browser(url: str, out_dir: Path | None = None, session: requests.Se
     out_dir.mkdir(parents=True, exist_ok=True)
     images.write_compress_bat(out_dir)
     (out_dir / "page_source.html").write_text(html, encoding="utf-8")
-    manifest = download_images(session, select_for_download(data.images, all_images), out_dir / "competitor_imgs",
+    manifest = download_images(session, select_for_download(data.images, all_images), out_dir / config.IMAGES_DIR,
                                captured=captured, referer=url, append=append)
     (out_dir / "page_data.json").write_text(json.dumps(data.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
     return data, out_dir, manifest

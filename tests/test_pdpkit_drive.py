@@ -37,14 +37,14 @@ class DriveFolderTests(unittest.TestCase):
     def test_old_local_output_is_moved_into_drive(self):
         with tempfile.TemporaryDirectory() as d:
             local, drive = Path(d) / "pdp_output", Path(d) / "My Drive" / "imageGrabber"
-            (local / "fall-tumbler" / "competitor_imgs").mkdir(parents=True)
-            (local / "fall-tumbler" / "competitor_imgs" / "gallery_01.jpg").write_bytes(b"x")
+            (local / "fall-tumbler" / "custom-images").mkdir(parents=True)
+            (local / "fall-tumbler" / "custom-images" / "gallery_01.jpg").write_bytes(b"x")
             (local / "skull-candle-warmer").mkdir()
             (drive / "skull-candle-warmer").mkdir(parents=True)        # already in Drive: left alone
             with mock.patch.object(config, "OUTPUT_ROOT", drive), mock.patch.object(config, "LOCAL_OUTPUT", local), \
                  mock.patch.object(config, "OUTPUT_IS_DRIVE", True):
                 cli._require_output()
-            self.assertTrue((drive / "fall-tumbler" / "competitor_imgs" / "gallery_01.jpg").is_file())
+            self.assertTrue((drive / "fall-tumbler" / "custom-images" / "gallery_01.jpg").is_file())
             self.assertFalse((local / "fall-tumbler").exists())
             self.assertTrue((local / "skull-candle-warmer").exists())   # not clobbered
             self.assertTrue(local.exists())                             # not empty, so kept

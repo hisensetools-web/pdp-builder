@@ -219,7 +219,7 @@ def mark_done(client: ClickUp, row: Row, folder: str, images: int, *, list_id: s
     if comment:
         try:
             links = "\n".join(f"- {u}" for u in row.urls)
-            client.comment(row.task_id, f"Images pulled: {images} file(s) -> {Path(folder).name}\\competitor_imgs\n{links}")
+            client.comment(row.task_id, f"Images pulled: {images} file(s) -> {Path(folder).name}\\{config.IMAGES_DIR}\n{links}")
             notes.append("comment posted")
         except ClickUpError as e:
             notes.append(f"could not comment: {e}")

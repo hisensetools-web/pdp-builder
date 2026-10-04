@@ -26,6 +26,14 @@ from pathlib import Path
 from . import config
 from .higgsfield import IMAGE_SUFFIXES, download, pick_references
 
+
+def _images_dir(product_dir):
+    from . import config as _c
+    for name in (_c.IMAGES_DIR, *_c.OLD_IMAGES_DIRS):
+        if (product_dir / name).is_dir():
+            return product_dir / name
+    return product_dir / _c.IMAGES_DIR
+
 log = logging.getLogger("pdpkit.higgsfield_cli")
 
 PHOTOSHOOT_MODES = (
@@ -117,9 +125,9 @@ def generate(product_dir: Path, product_name: str, prompts: list[str], *, refs: 
              dry_run: bool = False) -> Path:
     out = product_dir / config.generated_dir_name(product_name)
     out.mkdir(parents=True, exist_ok=True)
-    refs = refs or pick_references(product_dir / "competitor_imgs")
+    refs = refs or pick_references(_images_dir(product_dir))
     if not refs:
-        raise SystemExit(f"no reference images in {product_dir / 'competitor_imgs'}; run `grab` first")
+        raise SystemExit(f"no reference images in {_images_dir(product_dir)}; run `grab` first")
     log_path = out / "generation_log.json"
     entries = json.loads(log_path.read_text()) if log_path.exists() else []
     existing = sum(1 for p in out.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)

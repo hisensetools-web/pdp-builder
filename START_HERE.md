@@ -39,7 +39,7 @@ Open the `imageGrabber` folder and **double-click `RUN.bat`**. Nothing else.
 What it does, in order (you'll see each step in the window):
 
 1. Reads the **Product Research** list in ClickUp and takes every card in the **ready for lp** column that has a competitor link (in *Main Competitor* or in the card's description).
-2. Downloads every image from each competitor page into `pdp_output\<product name>\competitor_imgs\`. Images are compressed and there are no duplicates.
+2. Downloads every image from each competitor page into `pdp_output\<product name>\custom-images\`. Images are compressed and there are no duplicates.
 3. Ticks **z-imagesPulled** on the card and leaves a comment saying where the images went, so nobody pulls it twice.
 4. Skips cards it already did, so running it again is quick.
 
@@ -75,7 +75,7 @@ folder per product:
 ```
 imageGrabber (Drive)\
     swinging-ghost-decor\
-      competitor_imgs\        <- the downloaded photos: gallery_01.jpg (product photos first), then page_01.jpg ...
+      custom-images\        <- the downloaded photos: gallery_01.jpg (product photos first), then page_01.jpg ...
       compress_images.bat     <- see below
       product_summary.md      <- the competitor page's text: title, price, bullets, FAQ
     bling-ghostface-collection\

@@ -6,7 +6,7 @@ Give it a competitor product page and it produces everything needed to launch ou
 
 | what | where | command |
 |---|---|---|
-| every image on the competitor's page, rendered in headless Chromium so JavaScript-only slides and lazy images are included, size suffixes stripped so you get the full-size files, compressed (`--gallery-only` keeps just the product scroller) | `competitor_imgs/` + `manifest.json` (source URL, alt text, kind) | `grab` |
+| every image on the competitor's page, rendered in headless Chromium so JavaScript-only slides and lazy images are included, size suffixes stripped so you get the full-size files, compressed (`--gallery-only` keeps just the product scroller) | `custom-images/` + `manifest.json` (source URL, alt text, kind) | `grab` |
 | `compress_images.bat`: double-click after pasting the Higgsfield images in, and every image in the folder lands in `compressed/` as light WebP | `compress_images.bat` -> `compressed/` | `grab` writes it; `compress` runs it |
 | summary of the competitor page (title, price/compare-at, variants, copy, headings in order, bullets, FAQ, trust lines, reviews) | `product_summary.md` + `product_summary.json` | `grab` |
 | new images rendered by Higgsfield from your prompt, with the competitor images as references | `<product name>_shopify_PDP_imgs/` + `generation_log.json` | `generate` |
@@ -98,7 +98,7 @@ That is the whole daily routine. `batch`:
 2. reads the **Product Research** list in ClickUp (`CLICKUP_TOKEN` in `.env`) and takes every task in
    **ready for lp** with a competitor link in *Main Competitor* or in the description (all the links; research
    links like TikTok / pipiads are ignored);
-3. grabs every image on each page into `pdp_output\<task name>\competitor_imgs\`, compressed, no duplicates,
+3. grabs every image on each page into `pdp_output\<task name>\custom-images\`, compressed, no duplicates,
    with a `compress_images.bat` beside it for the Higgsfield output later;
 4. ticks the **z-imagesPulled** checkbox on the task and posts one comment with the folder, so the task is skipped
    next time, from any laptop;
@@ -175,7 +175,7 @@ Per run, on `grab` and `batch`:
 
 ```bash
 python imageGrabber.py batch --no-compress        # save the store's files exactly as served
-python imageGrabber.py batch --keep-originals     # compressed images plus the untouched ones in competitor_imgs/originals/
+python imageGrabber.py batch --keep-originals     # compressed images plus the untouched ones in custom-images/originals/
 python imageGrabber.py batch --max-px 3000 --quality 90    # bigger and sharper
 python imageGrabber.py batch --format webp        # or png
 ```

@@ -205,7 +205,7 @@ BAT_NAME = "compress_images.bat"
 
 def write_compress_bat(folder: Path) -> Path:
     """Drop a double-clickable compress_images.bat into a product folder. It runs `imageGrabber.py compress`
-    on that folder, so every image in it (competitor_imgs, the Higgsfield output folder, anything
+    on that folder, so every image in it (custom-images, the Higgsfield output folder, anything
     else you paste in) is compressed into compressed/ without opening a terminal.
 
     The product folder may live in a shared Google Drive folder, so the .bat looks for the tool in

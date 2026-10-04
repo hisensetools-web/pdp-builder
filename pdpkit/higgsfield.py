@@ -23,6 +23,14 @@ import requests
 
 from . import config
 
+
+def _images_dir(product_dir):
+    from . import config as _c
+    for name in (_c.IMAGES_DIR, *_c.OLD_IMAGES_DIRS):
+        if (product_dir / name).is_dir():
+            return product_dir / name
+    return product_dir / _c.IMAGES_DIR
+
 log = logging.getLogger("pdpkit.higgsfield")
 
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
@@ -202,9 +210,9 @@ def generate(product_dir: Path, product_name: str, prompts: list[str], *, refs: 
     out = product_dir / config.generated_dir_name(product_name)
     out.mkdir(parents=True, exist_ok=True)
     model = model or config.HIGGSFIELD_MODEL
-    refs = refs or pick_references(product_dir / "competitor_imgs")
+    refs = refs or pick_references(_images_dir(product_dir))
     if not refs:
-        raise SystemExit(f"no reference images in {product_dir / 'competitor_imgs'}; run `grab` first")
+        raise SystemExit(f"no reference images in {_images_dir(product_dir)}; run `grab` first")
 
     client = higgsfield_client.SyncClient(timeout=180.0)
     log_path = out / "generation_log.json"

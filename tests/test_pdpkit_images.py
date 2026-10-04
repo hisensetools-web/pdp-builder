@@ -165,10 +165,10 @@ class CompressFolderTests(unittest.TestCase):
     """`imageGrabber.py compress <folder>` / compress_images.bat: everything under a product folder, light and in one place."""
 
     def make_folder(self, root):
-        (root / "competitor_imgs").mkdir()
+        (root / "custom-images").mkdir()
         (root / "sol_shopify_PDP_imgs").mkdir()
-        (root / "competitor_imgs" / "gallery_01.png").write_bytes(png_bytes(1600, 1200))
-        (root / "competitor_imgs" / "hero.png").write_bytes(png_bytes(1200, 1200))
+        (root / "custom-images" / "gallery_01.png").write_bytes(png_bytes(1600, 1200))
+        (root / "custom-images" / "hero.png").write_bytes(png_bytes(1200, 1200))
         (root / "sol_shopify_PDP_imgs" / "hero.png").write_bytes(png_bytes(2600, 2600))   # heavy generator output, same stem
         (root / "product_summary.md").write_text("not an image")
         return root
@@ -236,7 +236,7 @@ class CompressFolderTests(unittest.TestCase):
     def test_ensure_bats_backfills_folders_grabbed_earlier(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            (root / "skull-candle-warmer" / "competitor_imgs").mkdir(parents=True)
+            (root / "skull-candle-warmer" / "custom-images").mkdir(parents=True)
             (root / "has-one").mkdir()
             images.write_compress_bat(root / "has-one")
             before = (root / "has-one" / "compress_images.bat").stat().st_mtime_ns
@@ -256,7 +256,7 @@ class AppendDownloadTests(unittest.TestCase):
             return mock.Mock(status_code=200, content=responses[url], headers={"content-type": "image/png"})
 
         with tempfile.TemporaryDirectory() as d, mock.patch.object(scrape, "_get", side_effect=fake_get):
-            dest = Path(d) / "competitor_imgs"
+            dest = Path(d) / "custom-images"
             first = scrape.download_images(mock.Mock(), [scrape.ImageRef(url="https://s/a.png", kind="gallery", order=1),
                                                          scrape.ImageRef(url="https://s/b.png", kind="page", order=2)], dest, delay_s=0)
             second = scrape.download_images(mock.Mock(), [scrape.ImageRef(url="https://s/c.png", kind="gallery", order=1),

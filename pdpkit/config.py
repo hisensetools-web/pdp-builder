@@ -94,7 +94,11 @@ COMPRESS_IMAGES = os.environ.get("PDP_COMPRESS", "1").strip() not in ("0", "fals
 IMAGE_MAX_PX = int(os.environ.get("PDP_IMAGE_MAX_PX", "2048"))     # longest side; 0 = no resize
 IMAGE_QUALITY = int(os.environ.get("PDP_IMAGE_QUALITY", "82"))     # JPEG/WebP quality
 IMAGE_FORMAT = os.environ.get("PDP_IMAGE_FORMAT", "jpeg").strip()  # jpeg / webp / png
-# keep the store's untouched file too, in competitor_imgs/originals/
+# the sub-folder inside each product folder that holds the downloaded images
+IMAGES_DIR = os.environ.get("PDP_IMAGES_DIR", "custom-images").strip() or "custom-images"
+OLD_IMAGES_DIRS = ("competitor_imgs",)      # folders made before the rename are still recognised
+
+# keep the store's untouched file too, in <images dir>/originals/
 KEEP_ORIGINALS = os.environ.get("PDP_KEEP_ORIGINALS", "").strip() in ("1", "true", "yes")
 # `imageGrabber.py compress <folder>` / compress_images.bat: the heavy preset for everything in a product folder
 HEAVY_FORMAT = os.environ.get("PDP_HEAVY_FORMAT", "webp").strip()    # webp / jpeg / png

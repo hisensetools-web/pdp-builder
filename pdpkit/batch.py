@@ -332,7 +332,7 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             res.steps.append("grab")
             print(f"    {data.title}")
             gallery = sum(1 for m in manifest if m.get("kind") == "gallery")
-            print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / 'competitor_imgs'}  ({cli_size(manifest)})")
+            print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / config.IMAGES_DIR}  ({cli_size(manifest)})")
             if manifest and not gallery:
                 print("    note: no separate product gallery detected; every image on the page is saved as page_NN")
             done(row, res)

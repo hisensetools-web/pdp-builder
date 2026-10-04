@@ -36,9 +36,9 @@ class CliBackendTests(unittest.TestCase):
         self.env = mock.patch.dict(os.environ, {"PATH": f"{root}{os.pathsep}{os.environ['PATH']}", "FAKE_HF_LOG": str(self.log)})
         self.env.start()
         self.pdir = root / "glow"
-        (self.pdir / "competitor_imgs").mkdir(parents=True)
+        (self.pdir / "custom-images").mkdir(parents=True)
         for n in ("gallery_01.jpg", "gallery_02.jpg", "page_01.jpg"):
-            (self.pdir / "competitor_imgs" / n).write_bytes(b"x")
+            (self.pdir / "custom-images" / n).write_bytes(b"x")
         self.dl = mock.patch("pdpkit.higgsfield_cli.download", side_effect=lambda url, dest: (dest.write_bytes(url.encode()), dest)[1])
         self.dl.start()
 
@@ -56,7 +56,7 @@ class CliBackendTests(unittest.TestCase):
         self.assertEqual(higgsfield_cli.extract_urls("ready:\n- https://cdn.higgsfield.ai/a.jpg\n- https://cdn.higgsfield.ai/a.jpg\n"), ["https://cdn.higgsfield.ai/a.jpg"])
 
     def test_generic_model_repeats_job_n_times_with_references(self):
-        out = higgsfield_cli.generate(self.pdir, "Glow", ["studio shot"], num_images=2, refs=[self.pdir / "competitor_imgs" / "gallery_01.jpg"])
+        out = higgsfield_cli.generate(self.pdir, "Glow", ["studio shot"], num_images=2, refs=[self.pdir / "custom-images" / "gallery_01.jpg"])
         calls = self.calls()
         self.assertEqual(len(calls), 2)
         c = calls[0]

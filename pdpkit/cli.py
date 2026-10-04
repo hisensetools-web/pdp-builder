@@ -171,7 +171,7 @@ def cmd_grab(args) -> int:
     print(f"product : {data.title}")
     print(f"ours    : {config.our_title(data.title, data.vendor, urlparse(data.url).netloc)}")
     print(f"folder  : {out_dir}")
-    print(f"images  : {len(manifest)} saved to {out_dir / 'competitor_imgs'} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
+    print(f"images  : {len(manifest)} saved to {out_dir / config.IMAGES_DIR} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
     print(f"size    : {_size_line(manifest)}")
     via = sum(1 for m in manifest if m.get("via") == "browser")
     if via:
@@ -623,7 +623,7 @@ def cmd_list(args) -> int:
     if added:
         print(f"compress_images.bat added to {len(added)} folder(s) grabbed before it existed")
     for d in sorted(p for p in root.iterdir() if p.is_dir()):
-        comp = d / "competitor_imgs"
+        comp = next((d / n for n in (config.IMAGES_DIR, *config.OLD_IMAGES_DIRS) if (d / n).is_dir()), d / config.IMAGES_DIR)
         n_comp = sum(1 for p in comp.iterdir() if p.suffix.lower() in (".jpg", ".png", ".webp", ".jpeg")) if comp.exists() else 0
         gens = [g for g in d.iterdir() if g.is_dir() and g.name.endswith("_shopify_PDP_imgs")]
         n_gen = sum(1 for g in gens for p in g.iterdir() if p.suffix.lower() in (".jpg", ".png", ".webp", ".jpeg"))
@@ -688,7 +688,7 @@ def build_parser() -> argparse.ArgumentParser:
         g.add_argument("--no-compress", action="store_true",
                        help="save images exactly as the store served them (no resize, no re-encode)")
         g.add_argument("--keep-originals", action="store_true",
-                       help="save the untouched files too, in competitor_imgs/originals/")
+                       help="save the untouched files too, in custom-images/originals/")
         g.add_argument("--max-px", type=int, metavar="N",
                        help=f"longest side after resize (default {config.IMAGE_MAX_PX}; 0 = never resize)")
         g.add_argument("--quality", type=int, metavar="N", help=f"JPEG/WebP quality (default {config.IMAGE_QUALITY})")
@@ -726,7 +726,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_image_opts(s)
     s.set_defaults(func=cmd_grab)
 
-    s = sub.add_parser("generate", help="Higgsfield images using competitor_imgs as references")
+    s = sub.add_parser("generate", help="Higgsfield images using the downloaded custom-images as references")
     add_product(s)
     add_generate_opts(s)
     s.add_argument("--dry-run", action="store_true", help="print the request without calling Higgsfield")

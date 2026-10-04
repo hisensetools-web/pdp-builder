@@ -99,7 +99,7 @@ class BrowserCaptureTests(unittest.TestCase):
             # slides 3 and 4 exist only after the carousel's "next" is clicked; protected.jpg refuses
             # a request without a Referer; hero is below the fold and lazy
             self.assertEqual(names, ["hero.jpg", "protected.jpg", "slide1.jpg", "slide2.jpg", "slide3.jpg", "slide4.jpg"])
-            self.assertTrue(all((out_dir / "competitor_imgs" / m["file"]).stat().st_size > 1000 for m in manifest))
+            self.assertTrue(all((out_dir / "custom-images" / m["file"]).stat().st_size > 1000 for m in manifest))
             gallery = sorted(m["url"].rsplit("/", 1)[-1] for m in manifest if m["kind"] == "gallery")
             self.assertEqual(gallery, ["slide1.jpg", "slide2.jpg", "slide3.jpg", "slide4.jpg"])
 
