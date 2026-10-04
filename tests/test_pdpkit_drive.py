@@ -84,3 +84,18 @@ class DesktopCopyTests(unittest.TestCase):
             (desk / "thing").mkdir(parents=True)
             self.assertIsNone(images.mirror_product(desk / "thing", desk))
             self.assertIsNone(images.mirror_product(desk / "thing", None))
+
+
+class CopyOnSkipTests(unittest.TestCase):
+    def test_already_grabbed_products_are_copied_to_the_desktop_too(self):
+        from pdpkit import batch
+        with tempfile.TemporaryDirectory() as d:
+            drive = Path(d) / "drive"; desk = Path(d) / "desk"
+            (drive / "fall-tumbler" / "custom-images").mkdir(parents=True)
+            (drive / "fall-tumbler" / "custom-images" / "gallery_01.jpg").write_bytes(b"x")
+            (drive / "fall-tumbler" / "product_summary.json").write_text('{"url": "https://s.com/products/fall"}')
+            with mock.patch.object(config, "OUTPUT_ROOT", drive), mock.patch.object(config, "COPY_ROOT", desk), \
+                 mock.patch("pdpkit.scrape.make_session"):
+                results = batch.process([batch.Row("Fall Tumbler", "https://s.com/products/fall", 0)])
+            self.assertEqual(results[0].status, "skipped")
+            self.assertTrue((desk / "fall-tumbler" / "custom-images" / "gallery_01.jpg").is_file())

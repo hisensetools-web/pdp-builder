@@ -268,6 +268,11 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
     from . import scrape, summary
 
     def done(row: Row, res: Result) -> None:
+        if res.folder:
+            from . import images as _images
+            copy = _images.mirror_product(Path(res.folder))
+            if copy:
+                print(f"    copy on this computer -> {copy}")
         if after and res.folder:
             try:
                 note = after(row, res)
@@ -335,10 +340,6 @@ def process(rows: list[Row], *, do_guide: bool = False, do_upload: bool = False,
             print(f"    {len(manifest)} images ({gallery} gallery) -> {out_dir / config.IMAGES_DIR}  ({cli_size(manifest)})")
             if manifest and not gallery:
                 print("    note: no separate product gallery detected; every image on the page is saved as page_NN")
-            from . import images as _images
-            copy = _images.mirror_product(out_dir)
-            if copy:
-                print(f"    copy on this computer -> {copy}")
             done(row, res)
         except Exception as e:  # noqa: BLE001 - one bad store must not stop the batch
             res.status, res.error = "failed", (str(e) if isinstance(e, RowError) else short_error(e))
