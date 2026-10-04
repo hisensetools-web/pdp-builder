@@ -176,7 +176,9 @@ AUTO_UPDATE = os.environ.get("PDP_AUTO_UPDATE", "1").strip() not in ("0", "false
 # CLICKUP_DONE_FIELD checkbox is ticked (and a comment posted) once the images are on disk.
 CLICKUP_TOKEN = os.environ.get("CLICKUP_TOKEN", "").strip()
 CLICKUP_LIST_ID = os.environ.get("CLICKUP_LIST_ID", "901222590753").strip()      # TT - Dropshipping > Product Research
-CLICKUP_STATUS = os.environ.get("CLICKUP_STATUS", "ready for lp").strip()      # the column that means "pull the images now"
+# the columns that mean "pull the images now" (comma-separated; names compared without case/spaces)
+CLICKUP_STATUS = os.environ.get("CLICKUP_STATUS", "ready for lp, lp ready, building").strip()
+CLICKUP_STATUSES = [x.strip() for x in CLICKUP_STATUS.replace(";", ",").split(",") if x.strip()]
 CLICKUP_URL_FIELD = os.environ.get("CLICKUP_URL_FIELD", "Main Competitor").strip()
 CLICKUP_DONE_FIELD = os.environ.get("CLICKUP_DONE_FIELD", "z-imagesPulled").strip()   # empty = never tick anything
 CLICKUP_COMMENT = os.environ.get("CLICKUP_COMMENT", "1").strip() not in ("0", "false", "no")

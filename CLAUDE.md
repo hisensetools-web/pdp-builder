@@ -10,7 +10,7 @@ product card's competitor page into the team's shared Google Drive folder, then 
 | The person says | Run |
 |---|---|
 | "grab / pull the images for **X**" (a product name, a ClickUp link, or a card id) | `py imageGrabber.py pull "X"` |
-| "pull everything that's ready", "run the queue", "do today's pull" | `py imageGrabber.py batch` (every card in the *ready for lp* column) |
+| "pull everything that's ready", "run the queue", "do today's pull" | `py imageGrabber.py batch` (every card in *Ready for LP*, *LP Ready* or *Building*) |
 | "pull X again", "redo X" | `py imageGrabber.py pull "X" --redo` |
 | "grab the images from this link" (a competitor URL, not in ClickUp) | `py imageGrabber.py grab <url> --name "X"` |
 | "compress the images for X" / after Higgsfield images were added to a folder | `py imageGrabber.py compress "X"` |

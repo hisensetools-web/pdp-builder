@@ -357,7 +357,7 @@ def cmd_batch(args) -> int:
     if not args.no_update and _self_update():
         env = dict(os.environ, PDP_RESTARTED="1")
         return subprocess.call([sys.executable, str(config.ROOT / "imageGrabber.py")] + sys.argv[1:], env=env)
-    # the queue: ClickUp when a token is set (every task in the "ready for lp" column), else the sheet; a link
+    # the queue: ClickUp when a token is set (every task in the Ready for LP / LP Ready / Building columns), else the sheet; a link
     # or a CSV path on the command line overrides either
     given = args.csv or ""
     after = None
@@ -396,7 +396,7 @@ def cmd_batch(args) -> int:
     for r in rows:
         print(f"   {r.name or '(unnamed)':<45.45} {r.url[:70]}")
     if after is not None:
-        print(f"(from ClickUp: every task in '{config.CLICKUP_STATUS}' with a product link in '{config.CLICKUP_URL_FIELD}' "
+        print(f"(from ClickUp: every task in {' / '.join(config.CLICKUP_STATUSES)} with a product link in '{config.CLICKUP_URL_FIELD}' "
               f"or its description; done tasks get '{config.CLICKUP_DONE_FIELD}' ticked)\n")
     elif sheet:
         print("(rows come from the live sheet; a product is taken when its Competition cell holds a product link "
@@ -523,8 +523,8 @@ def cmd_clickup_check(args) -> int:
         statuses = [st.get('status') for st in info.get('statuses') or []]
         if statuses:
             try:
-                real, note = clickup.resolve_status(c, config.CLICKUP_LIST_ID, config.CLICKUP_STATUS)
-                print(f"status : pulling '{real}'" + (f"  ({note})" if note else "") + f"  list has {statuses}")
+                real, notes = clickup.resolve_statuses(c, config.CLICKUP_LIST_ID, config.CLICKUP_STATUSES)
+                print(f"status : pulling from {' / '.join(real)}" + (f"  ({'; '.join(notes)})" if notes else "") + f"  list has {statuses}")
             except clickup.ClickUpError as e:
                 print(f"status : {e}")
         names = [f.get("name") for f in c.fields(config.CLICKUP_LIST_ID)]

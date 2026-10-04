@@ -96,7 +96,7 @@ That is the whole daily routine. `batch`:
 
 1. updates itself (`git pull`) when run from a git checkout, restarting if the tool changed;
 2. reads the **Product Research** list in ClickUp (`CLICKUP_TOKEN` in `.env`) and takes every task in
-   **ready for lp** with a competitor link in *Main Competitor* or in the description (all the links; research
+   **Ready for LP**, **LP Ready** or **Building** with a competitor link in *Main Competitor* or in the description (all the links; research
    links like TikTok / pipiads are ignored);
 3. grabs every image on each page into `pdp_output\<task name>\custom-images\`, compressed, no duplicates,
    with a `compress_images.bat` beside it for the Higgsfield output later;

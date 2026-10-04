@@ -135,42 +135,66 @@ def _norm(s: str) -> str:
     return "".join(ch for ch in (s or "").lower() if ch.isalnum())
 
 
-def resolve_status(client: ClickUp, list_id: str, wanted: str) -> tuple[str, str]:
-    """The list's real status name for `wanted`: exact (ignoring case/spaces), else a known alias.
-    Returns (status, note); raises with the list's statuses when nothing fits."""
+def resolve_statuses(client: ClickUp, list_id: str, wanted: list[str] | str) -> tuple[list[str], list[str]]:
+    """The list's real status names for the wanted ones (case/spaces ignored). A wanted name that is
+    not on the list is reported, not fatal; if none of them exist, the usual aliases are tried; if
+    still nothing, raises with the list's statuses."""
+    wanted_list = [wanted] if isinstance(wanted, str) else list(wanted)
     statuses = [st.get("status", "") for st in client.list_info(list_id).get("statuses") or []]
     if not statuses:
-        return wanted, ""
+        return wanted_list, []
     by_norm = {_norm(st): st for st in statuses}
-    if _norm(wanted) in by_norm:
-        return by_norm[_norm(wanted)], ""
-    for alias in STATUS_ALIASES:
-        if _norm(alias) in by_norm:
-            real = by_norm[_norm(alias)]
-            return real, f"status '{wanted}' does not exist on the list any more; using '{real}' (set CLICKUP_STATUS to silence this)"
-    raise ClickUpError(f"status '{wanted}' is not on the list, and none of the usual names are either. "
-                       f"The list has: {', '.join(statuses)}. Set CLICKUP_STATUS in .env to the right one.")
+    found, notes = [], []
+    for w in wanted_list:
+        if _norm(w) in by_norm:
+            if by_norm[_norm(w)] not in found:
+                found.append(by_norm[_norm(w)])
+        else:
+            notes.append(f"column '{w}' does not exist on the list (it has: {', '.join(statuses)})")
+    if not found:
+        for alias in STATUS_ALIASES:
+            if _norm(alias) in by_norm:
+                found = [by_norm[_norm(alias)]]
+                notes.append(f"using '{found[0]}' instead (set CLICKUP_STATUS to silence this)")
+                break
+    if not found:
+        raise ClickUpError(f"none of {wanted_list} is a column on the list, and none of the usual names are either. "
+                           f"The list has: {', '.join(statuses)}. Set CLICKUP_STATUS in .env.")
+    return found, notes
+
+
+def resolve_status(client: ClickUp, list_id: str, wanted: str) -> tuple[str, str]:
+    """Single-status form of resolve_statuses (kept for callers that want one name)."""
+    found, notes = resolve_statuses(client, list_id, [wanted])
+    return found[0], "; ".join(notes)
 
 
 def _truthy(v) -> bool:
     return v is True or str(v).strip().lower() in ("true", "1", "yes")
 
 
-def product_rows(client: ClickUp, *, list_id: str | None = None, status: str | None = None, url_field: str | None = None,
-                 done_field: str | None = None, include_done: bool = False) -> tuple[list[Row], str]:
-    """Rows for `batch.process` from the ClickUp list: one per task in `status`, links from the URL
-    field + the description. Tasks whose done-checkbox is ticked are left out unless include_done."""
+def product_rows(client: ClickUp, *, list_id: str | None = None, status: str | list[str] | None = None,
+                 url_field: str | None = None, done_field: str | None = None, include_done: bool = False) -> tuple[list[Row], str]:
+    """Rows for `batch.process` from the ClickUp list: one per task in any of the `status` columns,
+    links from the URL field + the description. Tasks whose done-checkbox is ticked are left out
+    unless include_done; a task is never listed twice."""
     list_id = list_id or config.CLICKUP_LIST_ID
-    status = status or config.CLICKUP_STATUS
+    status = status or config.CLICKUP_STATUSES
     url_field = url_field or config.CLICKUP_URL_FIELD
     done_field = config.CLICKUP_DONE_FIELD if done_field is None else done_field
     rows: list[Row] = []
     no_link: list[str] = []
     done = 0
-    status, status_note = resolve_status(client, list_id, status)
-    if status_note:
-        print(f"    {status_note}", flush=True)
-    tasks = client.tasks(list_id, statuses=[status])
+    statuses, status_notes = resolve_statuses(client, list_id, status)
+    for n in status_notes:
+        print(f"    {n}", flush=True)
+    seen_ids: set[str] = set()
+    tasks = []
+    for t in client.tasks(list_id, statuses=statuses):
+        if t.get("id") in seen_ids:
+            continue
+        seen_ids.add(t.get("id"))
+        tasks.append(t)
     for t in tasks:
         name = (t.get("name") or "").strip()
         if not include_done and _truthy(_field_value(t, done_field)):
@@ -188,7 +212,7 @@ def product_rows(client: ClickUp, *, list_id: str | None = None, status: str | N
             no_link.append(name or t.get("id", "?"))
             continue
         rows.append(Row(name=name, url=urls[0], source_row=0, extras=urls[1:], task_id=t.get("id", ""), task_url=t.get("url", "")))
-    note = f"ClickUp list {list_id}, status '{status}'"
+    note = f"ClickUp list {list_id}, columns {' / '.join(statuses)}"
     if done:
         note += f", {done} already pulled"
     if no_link:
