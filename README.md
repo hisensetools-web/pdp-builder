@@ -109,7 +109,8 @@ That is the whole daily routine. `batch`:
 for Desktop, any drive letter or the user profile) and saves there; without it the run stops and prints the two setup
 steps (install Drive for Desktop; add the shared folder as a shortcut in My Drive). Anything left in an old local
 `pdp_output` is moved into Drive on the first run. `PDP_OUTPUT_DIR` overrides the location, `PDP_ALLOW_LOCAL=1`
-permits a local `pdp_output` (tests, a machine without Drive), `python imageGrabber.py drive-check` reports the state.
+permits a local `pdp_output` (tests, a machine without Drive), `python imageGrabber.py drive-check` reports the state. Every product folder is also copied to
+`Desktop\imageGrabber images` on the machine that ran it (`PDP_COPY_TO` to move it, `PDP_DESKTOP_COPY=0` to turn it off).
 Because every laptop writes to the same folder, a product grabbed on one is skipped on the others, and
 `compress_images.bat` inside those folders finds the tool on whichever laptop double-clicks it.
 

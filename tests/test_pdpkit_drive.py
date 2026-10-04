@@ -52,3 +52,35 @@ class DriveFolderTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DesktopCopyTests(unittest.TestCase):
+    def test_product_folder_is_copied_and_recopied_only_when_changed(self):
+        from pdpkit import images
+        with tempfile.TemporaryDirectory() as d:
+            drive = Path(d) / "My Drive" / "imageGrabber" / "fall-tumbler"
+            (drive / "custom-images").mkdir(parents=True)
+            (drive / "custom-images" / "gallery_01.jpg").write_bytes(b"abc")
+            (drive / "custom-images" / "originals").mkdir()
+            (drive / "custom-images" / "originals" / "gallery_01.png").write_bytes(b"big")
+            (drive / "product_summary.md").write_text("x")
+            desk = Path(d) / "Desktop" / "imageGrabber images"
+            copy = images.mirror_product(drive, desk)
+            self.assertEqual(copy, desk / "fall-tumbler")
+            self.assertEqual((copy / "custom-images" / "gallery_01.jpg").read_bytes(), b"abc")
+            self.assertTrue((copy / "product_summary.md").is_file())
+            self.assertFalse((copy / "custom-images" / "originals").exists())      # originals are not mirrored
+            first = (copy / "custom-images" / "gallery_01.jpg").stat().st_mtime_ns
+            images.mirror_product(drive, desk)
+            self.assertEqual((copy / "custom-images" / "gallery_01.jpg").stat().st_mtime_ns, first)   # unchanged: untouched
+            (drive / "custom-images" / "gallery_02.jpg").write_bytes(b"new")
+            images.mirror_product(drive, desk)
+            self.assertTrue((copy / "custom-images" / "gallery_02.jpg").is_file())
+
+    def test_copy_is_skipped_when_off_or_when_the_folder_is_the_copy(self):
+        from pdpkit import images
+        with tempfile.TemporaryDirectory() as d:
+            desk = Path(d) / "Desktop" / "imageGrabber images"
+            (desk / "thing").mkdir(parents=True)
+            self.assertIsNone(images.mirror_product(desk / "thing", desk))
+            self.assertIsNone(images.mirror_product(desk / "thing", None))

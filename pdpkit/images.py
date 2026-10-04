@@ -257,3 +257,33 @@ def ensure_bats(root: Path | None = None) -> list[Path]:
             write_compress_bat(folder)
             added.append(folder)
     return added
+
+
+def mirror_product(folder: Path, dest_root: Path | None = None) -> Path | None:
+    """Copy a product folder to the Desktop copy (config.COPY_ROOT): new or changed files only, so a
+    second run is cheap. Returns the copy's path, or None when the copy is off or the product
+    folder *is* the copy. Never raises: the Drive copy is the one that matters."""
+    import shutil
+    dest_root = config.COPY_ROOT if dest_root is None else dest_root
+    if not dest_root:
+        return None
+    folder = Path(folder)
+    try:
+        if folder.resolve().parent == Path(dest_root).resolve():
+            return None
+        target = Path(dest_root) / folder.name
+        for src in folder.rglob("*"):
+            if not src.is_file():
+                continue
+            rel = src.relative_to(folder)
+            if "originals" in rel.parts:
+                continue
+            dst = target / rel
+            if dst.exists() and dst.stat().st_size == src.stat().st_size and int(dst.stat().st_mtime) >= int(src.stat().st_mtime):
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+        return target
+    except OSError as e:
+        log.warning("could not copy %s to %s: %s", folder.name, dest_root, e)
+        return None

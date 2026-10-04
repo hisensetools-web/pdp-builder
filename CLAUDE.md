@@ -29,7 +29,7 @@ Run the command and report what it printed: the product, how many images, where 
   through it, and the run continues. Tell the person to solve it and leave the window open. Do not close it.
 - The tool never changes a card's status; only the checkbox and a comment. Moving cards between columns is
   the team's job.
-- Output goes to `PDP_OUTPUT_DIR` from `.env` (the Drive folder) or `pdp_output` here. Don't move or rename
+- Output goes to the team's Google Drive folder, with a copy in `Desktop\imageGrabber images`. Don't move or rename
   those folders; other laptops rely on them.
 - `.env` holds the ClickUp key. Never print it, paste it into ClickUp, or commit it.
 - If a command fails, show the last lines it printed; `START_HERE.md` has a table of messages and fixes.

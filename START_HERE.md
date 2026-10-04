@@ -69,8 +69,8 @@ Two things Claude won't do: move cards between columns (that's yours), or change
 
 ## Where things end up
 
-In the team's Google Drive folder (the window says `images go to: ...` at the start of every run). Inside, one
-folder per product:
+In the team's Google Drive folder, **and** a copy in `Desktop\imageGrabber images` on your own computer (the window
+says `images go to: ...` and `and a copy to: ...` at the start of every run). Inside, one folder per product:
 
 ```
 imageGrabber (Drive)\

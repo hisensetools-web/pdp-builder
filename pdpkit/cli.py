@@ -173,6 +173,10 @@ def cmd_grab(args) -> int:
     print(f"folder  : {out_dir}")
     print(f"images  : {len(manifest)} saved to {out_dir / config.IMAGES_DIR} ({sum(1 for m in manifest if m['kind'] == 'gallery')} gallery)")
     print(f"size    : {_size_line(manifest)}")
+    from . import images as _images
+    copy = _images.mirror_product(out_dir)
+    if copy:
+        print(f"copy    : {copy}")
     via = sum(1 for m in manifest if m.get("via") == "browser")
     if via:
         print(f"note    : {via} image(s) came from the browser capture (the store refused a direct download)")
@@ -282,7 +286,8 @@ def _require_output() -> None:
     if config.OUTPUT_ROOT == config.LOCAL_OUTPUT and not config.ALLOW_LOCAL:
         raise SystemExit(_drive_help() + "\n  (To save on this computer instead, put PDP_ALLOW_LOCAL=1 in .env.)")
     config.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if config.OUTPUT_IS_DRIVE else ""))
+    print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if config.OUTPUT_IS_DRIVE else "")
+          + (f"\n   and a copy to: {config.COPY_ROOT}" if config.COPY_ROOT else ""))
     local = config.LOCAL_OUTPUT
     if config.OUTPUT_ROOT != local and local.is_dir():
         moved, kept = 0, []
@@ -316,6 +321,8 @@ def cmd_drive_check(args) -> int:
         print(_drive_help())
         return 1
     print(f"images go to: {config.OUTPUT_ROOT}" + ("  (Google Drive)" if config.OUTPUT_IS_DRIVE else "  (this computer only)"))
+    if config.COPY_ROOT:
+        print(f"   and a copy to: {config.COPY_ROOT}")
     return 0
 
 

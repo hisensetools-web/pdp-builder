@@ -73,6 +73,22 @@ def drive_installed() -> Path | None:
     return None
 
 
+# A second copy of every product folder on this computer (the Desktop), next to the Drive copy.
+# PDP_COPY_TO=<folder> picks the place; PDP_DESKTOP_COPY=0 turns it off.
+DESKTOP_COPY = os.environ.get("PDP_DESKTOP_COPY", "1").strip().lower() not in ("0", "false", "no")
+
+
+def desktop_dir() -> Path | None:
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
+    for cand in (home / "Desktop", home / "OneDrive" / "Desktop"):
+        if cand.is_dir():
+            return cand
+    return None
+
+
+_copy_to = os.environ.get("PDP_COPY_TO", "").strip()
+COPY_ROOT = Path(_copy_to) if _copy_to else ((desktop_dir() / "imageGrabber images") if DESKTOP_COPY and desktop_dir() else None)
+
 _override = os.environ.get("PDP_OUTPUT_DIR", "").strip()
 DRIVE_FOLDER = None if _override else find_drive_folder()
 OUTPUT_ROOT = Path(_override) if _override else (DRIVE_FOLDER or LOCAL_OUTPUT)
